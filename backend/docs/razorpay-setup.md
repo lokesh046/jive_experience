@@ -54,6 +54,23 @@ Both are verified, each with the right secret.
 **Local testing** needs a public URL — Razorpay cannot reach `localhost`. Use
 a tunnel (ngrok, zrok, cloudflared) and point the webhook at it.
 
+### Working without a webhook secret
+
+Leaving `PAYMENT_WEBHOOK_SECRET` unset is a supported state, not a broken one.
+Checkout, verification, refunds and reconciliation all work; only the webhook
+endpoint refuses, with `WEBHOOK_SECRET_NOT_CONFIGURED`.
+
+That is enough to develop and test against, because
+`POST /bookings/{ref}/verify` asks Razorpay directly and is authoritative. The
+webhook is the *backstop* for the case the browser never comes back — the
+customer closing the tab after paying, or losing signal. Without it, those
+payments are caught by the reconciliation sweep instead, which runs in the
+worker and asks Razorpay about anything still in flight.
+
+**Do not put a placeholder in that variable.** A wrong secret fails signature
+verification on every delivery, which looks like an attack in the logs rather
+than a configuration mistake. Unset is honest; wrong is confusing.
+
 ## 4. Configure the backend
 
 ```bash
