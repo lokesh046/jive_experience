@@ -1,0 +1,85 @@
+# Local development stack. The production stack (reverse proxy, frontend,
+# worker, scheduler, backups) is assembled in the deployment phase.
+name: jive-events
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jive}
+      POSTGRES_DB: ${POSTGRES_DB:-jive_events}
+      # Deterministic collation so ORDER BY matches between dev and prod.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-IN --encoding=UTF8"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jive} -d ${POSTGRES_DB:-jive_events}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      # Stateless: scale this service freely. Sessions are JWTs, the OAuth
+      # state lives in Redis, and nothing is held in process memory.
+      DB_POOL_SIZE: "${DB_POOL_SIZE:-10}"
+      DB_MAX_OVERFLOW: "${DB_MAX_OVERFLOW:-10}"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ["full"]   # `docker compose up` runs deps only; add --profile full for the API
+
+  worker:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      # A separate, smaller pool: a busy worker must not consume the
+      # connection budget the API needs to answer customers.
+      WORKER_DB_POOL_SIZE: "${WORKER_DB_POOL_SIZE:-5}"
+      WORKER_DB_MAX_OVERFLOW: "${WORKER_DB_MAX_OVERFLOW:-5}"
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Safe to run several: work is claimed with FOR UPDATE SKIP LOCKED.
+    profiles: ["full"]
+
+volumes:
+  postgres_data:
+  redis_data:

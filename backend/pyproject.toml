@@ -1,0 +1,89 @@
+[project]
+name = "jive-events-api"
+version = "0.1.0"
+description = "Event Management, Entertainment & Ticketing platform API"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "fastapi>=0.118.0",
+    "uvicorn[standard]>=0.37.0",
+    "pydantic[email]>=2.11.0",
+    "pydantic-settings>=2.10.0",
+    "sqlalchemy[asyncio]>=2.0.43",
+    "asyncpg>=0.30.0",
+    "alembic>=1.16.0",
+    "redis>=6.4.0",
+    "structlog>=25.4.0",
+    "httpx>=0.28.0",
+    "python-multipart>=0.0.20",
+    "pyjwt>=2.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.0.0",
+    "pytest-cov>=6.2.0",
+    "ruff>=0.12.0",
+    "mypy>=1.17.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+# ---------------------------------------------------------------- tooling ----
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "C4",        # comprehensions
+    "DTZ",       # flake8-datetimez  (timezone-aware datetimes only)
+    "T20",       # no print()
+    "SIM",       # simplify
+    "RUF",
+]
+ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/*" = ["I001", "E501"]
+"tests/*" = ["S101"]
+# A command-line tool talks to the operator on stdout; that is its interface.
+"app/cli.py" = ["T201"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+strict = true
+warn_return_any = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+exclude = "^alembic/versions/"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: requires a live PostgreSQL/Redis (run via docker compose)",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/main.py"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
