@@ -16,9 +16,14 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.models.commerce import Booking, BookingStatus
+from app.models.commerce import Booking, BookingItem, BookingStatus
 from app.models.event import Event, EventCategory, EventStatus, TicketCategory
-from app.models.fulfilment import CheckinResult, Ticket, TicketStatus
+from app.models.fulfilment import (
+    CheckinResult,
+    StaffEventAssignment,
+    Ticket,
+    TicketStatus,
+)
 from app.models.user import User, UserRole, UserStatus
 from app.models.venue import Venue
 from app.repositories.fulfilment import TicketRepository
@@ -624,4 +629,132 @@ async def test_scanning_a_cancelled_event_reports_cancelled_not_already_used(
     assert outcome.result is CheckinResult.CANCELLED, (
         f"expected CANCELLED, got {outcome.result}: {outcome.message}"
     )
+    assert not outcome.ok
+
+
+# ---- third review: the customer must be able to get a scannable code ----
+
+
+async def test_a_customer_can_retrieve_a_working_qr_code(
+    api: AsyncClient, google: StubGoogleClient, db_session: AsyncSession
+) -> None:
+    """The product-stopping one: tickets existed but no code was reachable.
+
+    Walks the whole path — issue, fetch, fetch again, scan, scan again.
+    """
+    from app.services.outbox import OutboxService
+
+    event, category = await make_event(db_session)
+    staff = await seed_staff(db_session)
+    db_session.add(StaffEventAssignment(user_id=staff.id, event_id=event.id))
+
+    customer = User(role=UserRole.CUSTOMER, status=UserStatus.ACTIVE, email=unique_email("qr"))
+    db_session.add(customer)
+    await db_session.flush()
+
+    booking = Booking(
+        reference=f"JIVE-{uuid.uuid4().hex[:8].upper()}",
+        user_id=customer.id,
+        event_id=event.id,
+        status=BookingStatus.CONFIRMED,
+        subtotal_paise=100000,
+        fees_paise=0,
+        total_paise=100000,
+        quantity=2,
+        confirmed_at=datetime.now(UTC),
+    )
+    db_session.add(booking)
+    await db_session.flush()
+    db_session.add(
+        BookingItem(
+            booking_id=booking.id,
+            ticket_category_id=category.id,
+            category_name="General",
+            unit_price_paise=100000,
+            quantity=2,
+            line_total_paise=200000,
+        )
+    )
+    await db_session.flush()
+
+    service = TicketService(db_session, OutboxService(db_session))
+    issued = await service.issue_for_booking(booking.id)
+    assert len(issued) == 2, "one ticket per purchased unit"
+
+    # Re-derived later, exactly as the customer's second visit would.
+    tickets = await service.for_booking(booking, customer=customer)
+    codes = [service.to_schema(t).qr_token for t in tickets]
+    assert all(codes), "every issued ticket must expose a code"
+    assert set(codes) == {i.qr_token for i in issued}, "stable across requests"
+    assert len(set(codes)) == 2, "each ticket has its own code"
+
+    first = codes[0]
+    assert first is not None
+
+    outcome = await service.scan(qr_token=first, event_id=event.id, staff=staff)
+    assert outcome.result is CheckinResult.SUCCESS, outcome.message
+
+    again = await service.scan(qr_token=first, event_id=event.id, staff=staff)
+    assert again.result is CheckinResult.ALREADY_USED, "one scan only"
+
+    # A spent ticket stops advertising a code it cannot use.
+    spent = await service.for_booking(booking, customer=customer)
+    used = next(t for t in spent if t.status is TicketStatus.CHECKED_IN)
+    assert service.to_schema(used).qr_token is None
+
+
+async def test_a_ticket_stops_working_after_the_event_finishes(
+    db_session: AsyncSession,
+) -> None:
+    """Valid from purchase until the event ends — not forever.
+
+    Without this, an unscanned code would still admit someone to a later show
+    in the same venue.
+    """
+    from app.services.outbox import OutboxService
+
+    event, category = await make_event(db_session)
+    staff = await seed_staff(db_session)
+    db_session.add(StaffEventAssignment(user_id=staff.id, event_id=event.id))
+
+    customer = User(role=UserRole.CUSTOMER, status=UserStatus.ACTIVE, email=unique_email("late"))
+    db_session.add(customer)
+    await db_session.flush()
+
+    booking = Booking(
+        reference=f"JIVE-{uuid.uuid4().hex[:8].upper()}",
+        user_id=customer.id,
+        event_id=event.id,
+        status=BookingStatus.CONFIRMED,
+        subtotal_paise=100000,
+        fees_paise=0,
+        total_paise=100000,
+        quantity=1,
+        confirmed_at=datetime.now(UTC),
+    )
+    db_session.add(booking)
+    await db_session.flush()
+    db_session.add(
+        BookingItem(
+            booking_id=booking.id,
+            ticket_category_id=category.id,
+            category_name="General",
+            unit_price_paise=100000,
+            quantity=1,
+            line_total_paise=100000,
+        )
+    )
+    await db_session.flush()
+
+    service = TicketService(db_session, OutboxService(db_session))
+    issued = await service.issue_for_booking(booking.id)
+    code = issued[0].qr_token
+
+    # The show has been and gone.
+    event.starts_at = datetime.now(UTC) - timedelta(days=2)
+    event.ends_at = datetime.now(UTC) - timedelta(days=2) + timedelta(hours=4)
+    await db_session.flush()
+
+    outcome = await service.scan(qr_token=code, event_id=event.id, staff=staff)
+    assert outcome.result is CheckinResult.EXPIRED, outcome.message
     assert not outcome.ok

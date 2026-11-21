@@ -257,6 +257,17 @@ can change; its subject identifier cannot. An unverified Google email is
 refused outright — accepting one would let an attacker claim an existing
 account by address.
 
+**Ticket QR codes are derived, not stored.** The code is
+`HMAC(QR_SIGNING_KEY, ticket_id)`, so the server can recompute it whenever the
+owner asks — a new phone, a cleared app, a queue at the gate — while the
+database holds only its hash. It is stable from purchase until the event ends,
+and single-use: the atomic check-in flips the ticket's status, so the second
+scan finds nothing to update. A spent ticket stops returning a code at all.
+
+Rotating `QR_SIGNING_KEY` invalidates every unscanned ticket, which is why it
+is a separate key from `SECRET_KEY` and rotates between events rather than
+casually.
+
 **Refresh tokens are stored hashed, and rotate.** Only a SHA-256 digest is
 persisted, so a database disclosure yields no usable sessions. Each login
 starts a token *family*; presenting an already-rotated token means the chain

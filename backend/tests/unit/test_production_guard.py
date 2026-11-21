@@ -18,6 +18,7 @@ def production(**overrides: object) -> Settings:
         "google_client_id": "prod-client-id.apps.googleusercontent.com",
         "google_client_secret": "prod-client-secret",
         "google_redirect_uri": "https://jive.example.com/auth/google/callback",
+        "qr_signing_key": "q" * 64,
     }
     return Settings(**(base | overrides))  # type: ignore[arg-type]
 
@@ -41,6 +42,7 @@ def test_development_settings_are_never_blocked() -> None:
         ({"google_client_id": None}, "Google OAuth"),
         ({"google_redirect_uri": "http://jive.example.com/cb"}, "https"),
         ({"log_json": False}, "LOG_JSON"),
+        ({"qr_signing_key": None}, "QR_SIGNING_KEY"),
     ],
 )
 def test_unsafe_production_settings_are_refused(

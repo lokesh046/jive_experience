@@ -53,6 +53,7 @@ class CheckinResult(StrEnum):
     REFUNDED = "REFUNDED"
     INVALID = "INVALID"
     NOT_ASSIGNED = "NOT_ASSIGNED"
+    EXPIRED = "EXPIRED"
 
 
 class OutboxStatus(StrEnum):

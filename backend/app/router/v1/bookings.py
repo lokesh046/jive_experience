@@ -188,7 +188,7 @@ async def booking_tickets(
     """
     booking = await bookings.get_for_customer(reference, customer)
     rows = await tickets.for_booking(booking, customer=customer)
-    return [TicketOut.model_validate(row) for row in rows]
+    return [tickets.to_schema(row) for row in rows]
 
 
 @router.get(
@@ -215,9 +215,7 @@ async def my_tickets(
     customer: RequireCustomer, service: TicketServiceDep, pagination: Pagination
 ) -> Page[TicketOut]:
     rows, total = await service.for_customer(customer, pagination)
-    return Page.build(
-        [TicketOut.model_validate(row) for row in rows], total=total, params=pagination
-    )
+    return Page.build([service.to_schema(row) for row in rows], total=total, params=pagination)
 
 
 webhook_router = APIRouter(tags=["payments"])

@@ -159,13 +159,20 @@ class RefundOut(BaseModel):
 
 
 class TicketOut(BaseModel):
-    """A ticket as the customer sees it.
+    """A ticket as the customer sees it, including its scannable code.
 
-    `qr_token` is present only in the response that issues the ticket. It is
-    stored hashed, so it can never be shown again.
+    `qr_token` is recomputed for each response rather than stored, so it can
+    be shown as often as the owner needs — on a new phone, after clearing an
+    app, at the gate — while the database still holds only a hash.
+
+    The code is stable for the life of the ticket and stops working the
+    moment it is scanned.
     """
 
     id: uuid.UUID
+    qr_token: str | None = Field(
+        default=None, description="Scannable code. Valid until the event, single use."
+    )
     serial: str
     booking_id: uuid.UUID
     event_id: uuid.UUID

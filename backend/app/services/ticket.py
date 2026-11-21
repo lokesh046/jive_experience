@@ -17,15 +17,16 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings, get_settings
 from app.core.errors import NotFoundError, PermissionDeniedError
 from app.core.pagination import PageParams
-from app.core.security import generate_opaque_token, hash_refresh_token
+from app.core.security import derive_qr_token, hash_refresh_token
 from app.models.commerce import Booking, BookingStatus
 from app.models.event import Event, EventStatus
 from app.models.fulfilment import CheckinResult, Ticket, TicketCheckin, TicketStatus
@@ -37,12 +38,17 @@ from app.repositories.fulfilment import (
     TicketCheckinRepository,
     TicketRepository,
 )
+from app.schemas.booking import TicketOut
 from app.services.audit import AuditService
 from app.services.outbox import TOPIC_TICKETS_ISSUED, OutboxService
 
 logger = structlog.get_logger(__name__)
 
 QR_TOKEN_BYTES = 32
+
+# How long after the published start a ticket still admits, when the event
+# carries no explicit end time. Shows overrun; gates stay open.
+EVENT_ADMISSION_GRACE = timedelta(hours=12)
 
 
 def hash_qr_token(token: str) -> str:
@@ -59,7 +65,8 @@ def hash_qr_token(token: str) -> str:
 class IssuedTicket:
     ticket: Ticket
     qr_token: str
-    """Returned once, at issue time. Never recoverable afterwards."""
+    """The scannable code. Derived from the ticket id, so unlike a random
+    secret it can be recomputed later and shown to the owner again."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,9 +81,12 @@ class ScanOutcome:
 
 
 class TicketService:
-    def __init__(self, session: AsyncSession, outbox: OutboxService) -> None:
+    def __init__(
+        self, session: AsyncSession, outbox: OutboxService, settings: Settings | None = None
+    ) -> None:
         self.session = session
         self.outbox = outbox
+        self.settings = settings or get_settings()
         self.tickets = TicketRepository(session)
         self.checkins = TicketCheckinRepository(session)
         self.assignments = StaffAssignmentRepository(session)
@@ -110,26 +120,33 @@ class TicketService:
 
         items = await self.bookings.items(booking.id)
         now = datetime.now(UTC)
-        issued: list[IssuedTicket] = []
+        issued: list[Ticket] = []
         serial_index = 0
 
         for item in items:
             for _ in range(item.quantity):
                 serial_index += 1
-                token = generate_opaque_token(QR_TOKEN_BYTES)
+                # The id is assigned here rather than left to the database
+                # default, because the QR token is derived from it and the
+                # hash column is NOT NULL — the row cannot be inserted until
+                # the id is known.
+                ticket_id = uuid.uuid4()
                 ticket = Ticket(
+                    id=ticket_id,
                     booking_id=booking.id,
                     booking_item_id=item.id,
                     event_id=booking.event_id,
                     ticket_category_id=item.ticket_category_id,
                     user_id=booking.user_id,
                     serial=f"{booking.reference}-{serial_index:02d}",
-                    qr_token_hash=hash_qr_token(token),
+                    qr_token_hash=hash_qr_token(
+                        derive_qr_token(ticket_id, secret=self.settings.qr_secret)
+                    ),
                     status=TicketStatus.ISSUED,
                     issued_at=now,
                 )
                 self.tickets.add(ticket)
-                issued.append(IssuedTicket(ticket=ticket, qr_token=token))
+                issued.append(ticket)
 
         try:
             await self.session.flush()
@@ -150,7 +167,18 @@ class TicketService:
         await self.session.commit()
 
         logger.info("tickets_issued", booking_id=str(booking.id), ticket_count=len(issued))
-        return issued
+        return [
+            IssuedTicket(ticket=ticket, qr_token=self.qr_token_for(ticket)) for ticket in issued
+        ]
+
+    def qr_token_for(self, ticket: Ticket) -> str:
+        """The scannable code for a ticket.
+
+        Recomputed on demand rather than stored, so a customer can reopen
+        their ticket whenever they like — including on a new device — while
+        the database still holds nothing a thief could scan.
+        """
+        return derive_qr_token(ticket.id, secret=self.settings.qr_secret)
 
     # ----------------------------------------------------- customer reads ---
 
@@ -163,6 +191,19 @@ class TicketService:
         self, customer: User, params: PageParams
     ) -> tuple[Sequence[Ticket], int]:
         return await self.tickets.for_user(customer.id, params)
+
+    def to_schema(self, ticket: Ticket) -> TicketOut:
+        """Serialise a ticket for its owner, code included.
+
+        Only ever reached through an ownership-checked path — the code is the
+        credential, so it must not appear in any admin or staff response.
+        """
+        payload = TicketOut.model_validate(ticket)
+        # A spent or voided ticket has no working code; returning one would
+        # invite a pointless trip to the gate.
+        if ticket.status is TicketStatus.ISSUED:
+            payload.qr_token = self.qr_token_for(ticket)
+        return payload
 
     # ------------------------------------------------------------ scanning ---
 
@@ -226,6 +267,23 @@ class TicketService:
             )
 
         event = await self.events.get(ticket.event_id)
+
+        # The ticket is valid from purchase until the event finishes. After
+        # that the gate is closed, and a code that still scanned would let
+        # someone walk into the next show on the same ticket.
+        if event is not None:
+            ends_at = event.ends_at or (event.starts_at + EVENT_ADMISSION_GRACE)
+            if now > ends_at:
+                return await self._record(
+                    result=CheckinResult.EXPIRED,
+                    ticket=ticket,
+                    event_id=event_id,
+                    staff=staff,
+                    now=now,
+                    device_label=device_label,
+                    message="This event has already finished.",
+                )
+
         if event is not None and event.status is EventStatus.CANCELLED:
             # Reported before the generic status checks. The atomic UPDATE in
             # `check_in` also refuses a cancelled event, but it refuses by

@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     # NoDecode: this class owns the parsing so that both `A,B` and a JSON
     # list work identically whether the value comes from the environment,
     # a .env file or a direct constructor call.
+    # Signs QR tokens. Separate from `secret_key` on purpose: session keys
+    # should be rotatable at will, and rotating this one invalidates every
+    # ticket that has not yet been scanned.
+    qr_signing_key: SecretStr | None = None
+
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
     trusted_hosts: Annotated[list[str], NoDecode] = ["*"]
 
@@ -186,6 +191,17 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.environment is Environment.PRODUCTION
 
+    @property
+    def qr_secret(self) -> str:
+        """Key used to derive ticket QR tokens.
+
+        Falls back to `secret_key` so nothing breaks before it is configured,
+        but production should set it explicitly — see `assert_production_ready`.
+        """
+        if self.qr_signing_key:
+            return self.qr_signing_key.get_secret_value()
+        return self.secret_key.get_secret_value()
+
     @computed_field(repr=False)  # type: ignore[prop-decorator]
     @property
     def google_oauth_configured(self) -> bool:
@@ -230,6 +246,12 @@ def assert_production_ready(settings: Settings) -> None:
         problems.append("GOOGLE_REDIRECT_URI must use https in production")
     if not settings.log_json:
         problems.append("LOG_JSON should be true so logs are parseable")
+    if not settings.qr_signing_key:
+        # Sharing the session key means any rotation of SECRET_KEY voids every
+        # ticket that has not yet been scanned — discovered at a gate.
+        problems.append(
+            "QR_SIGNING_KEY must be set separately from SECRET_KEY (use: openssl rand -hex 32)"
+        )
 
     if problems:
         raise RuntimeError("Refusing to start in production:\n  - " + "\n  - ".join(problems))

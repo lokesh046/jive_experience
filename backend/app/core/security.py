@@ -19,7 +19,9 @@ Two kinds of token, deliberately different:
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import hmac
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -128,6 +130,32 @@ def hash_refresh_token(token: str) -> str:
 
 
 # ------------------------------------------------------------------- misc ---
+
+
+QR_TOKEN_PREFIX = "jive-ticket-v1"
+
+
+def derive_qr_token(ticket_id: uuid.UUID, *, secret: str) -> str:
+    """The QR payload for a ticket.
+
+    Derived from the ticket id rather than drawn at random, which is what
+    makes it **re-displayable without being stored**. The customer can reopen
+    their ticket at any time and the server recomputes the same code; nothing
+    re-showable sits in the database, so a disclosure yields hashes only.
+
+    Properties this gives the ticket:
+
+    * **stable** — the same code from purchase until the event, so a printed
+      or screenshotted ticket keeps working;
+    * **unguessable** — 256-bit HMAC keyed with a server secret, so knowing a
+      ticket id tells an attacker nothing;
+    * **single-use** — enforced on redemption, not here: the atomic check-in
+      flips the ticket's status and the second scan finds nothing to update.
+    """
+    digest = hmac.new(
+        secret.encode(), f"{QR_TOKEN_PREFIX}:{ticket_id}".encode(), hashlib.sha256
+    ).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
 def generate_opaque_token(num_bytes: int = 32) -> str:
