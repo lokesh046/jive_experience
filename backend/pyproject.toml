@@ -62,6 +62,7 @@ ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
 "tests/*" = ["S101"]
 # A command-line tool talks to the operator on stdout; that is its interface.
 "app/cli.py" = ["T201"]
+"scripts/*.py" = ["T201"]
 
 [tool.mypy]
 python_version = "3.12"

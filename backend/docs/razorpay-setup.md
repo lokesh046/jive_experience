@@ -51,8 +51,42 @@ The webhook secret is **not** the API key secret. They sign different things:
 
 Both are verified, each with the right secret.
 
-**Local testing** needs a public URL — Razorpay cannot reach `localhost`. Use
-a tunnel (ngrok, zrok, cloudflared) and point the webhook at it.
+### Testing webhooks locally, without a tunnel
+
+Razorpay cannot reach `localhost`, but you do not need it to. The signature is
+HMAC-SHA256 of the raw body keyed with the webhook secret — and that secret is
+a value *you* choose. So set any secret locally and sign the request yourself:
+
+```bash
+# .env — a local value; replace it with the dashboard one when the real
+# webhook is created.
+PAYMENT_WEBHOOK_SECRET=<any long random string>
+```
+
+```bash
+python -m scripts.simulate_webhook \
+    --payment pay_test123 --order order_abc --amount 300000 --duplicate
+```
+
+The backend cannot tell this from a real delivery, which is the point: it goes
+through the same signature verification, the same deduplication and the same
+confirmation path.
+
+```
+payment.captured   -> 200 {"status":"processed"}
+redelivered        -> 200 {"status":"duplicate"}
+```
+
+Other events and the failure cases:
+
+```bash
+--event payment.failed       # booking stays unconfirmed
+--event refund.processed
+--tamper                     # alters the body after signing → must 401
+```
+
+A tunnel is only needed to test that Razorpay's *delivery* reaches you —
+network plumbing, not application behaviour. Do that once before launch.
 
 ### Working without a webhook secret
 

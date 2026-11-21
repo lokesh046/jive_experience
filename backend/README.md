@@ -38,6 +38,7 @@ Every command: `make`
 | `make worker` | Run the background worker (outbox + sweeper) |
 | `make token EMAIL=you@gmail.com` | Print an access token for Swagger UI |
 | `./scripts/smoke.sh` | Hit every endpoint against a running API |
+| `python -m scripts.simulate_webhook --payment pay_x --order order_x --amount 300000` | Send a signed payment webhook locally, no tunnel |
 | `make test` | Run all tests |
 | `make check` | Lint + types + tests (what CI runs) |
 | `make db` / `make stop` | Start / stop PostgreSQL and Redis |
