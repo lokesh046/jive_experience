@@ -224,12 +224,36 @@ class PaymentService:
             )
         return booking
 
-    async def verify_checkout(self, provider_payment_id: str, *, customer: User) -> Booking:
+    async def verify_checkout(
+        self,
+        provider_payment_id: str,
+        *,
+        customer: User,
+        provider_order_id: str | None = None,
+        signature: str | None = None,
+    ) -> Booking:
         """Confirm from the browser's return — by asking the provider.
 
         The redirect itself proves nothing; it is only a hint that a payment
-        may exist.
+        may exist. When the provider also hands the client a signature it is
+        checked first — cheap, and it rejects a fabricated payment id before
+        a network call is spent on it. The provider's own answer still
+        decides.
         """
+        if signature and provider_order_id:
+            verify = getattr(self.provider, "verify_checkout_signature", None)
+            if verify is not None and not verify(
+                provider_order_id=provider_order_id,
+                provider_payment_id=provider_payment_id,
+                signature=signature,
+            ):
+                logger.warning(
+                    "checkout_signature_invalid", provider_payment_id=provider_payment_id
+                )
+                raise AuthenticationError(
+                    "Payment verification failed.", code="CHECKOUT_SIGNATURE_INVALID"
+                )
+
         verified = await self.provider.fetch_payment(provider_payment_id)
         booking = await self.confirm_from_provider(verified, source="checkout")
         if booking is None:

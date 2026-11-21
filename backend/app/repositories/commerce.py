@@ -213,13 +213,12 @@ class BookingRepository(BaseRepository[Booking]):
         statement = select(func.coalesce(func.sum(Booking.quantity), 0)).where(
             Booking.user_id == user_id,
             Booking.event_id == event_id,
-            Booking.status.in_(
-                (
-                    BookingStatus.CONFIRMED,
-                    BookingStatus.PENDING,
-                    BookingStatus.PARTIALLY_REFUNDED,
-                )
-            ),
+            # PENDING is deliberately absent. A pending booking's tickets are
+            # still counted — by its live reservations, via
+            # `ReservationRepository.live_for_user` — and counting the booking
+            # here as well charged the customer's allowance twice, rejecting
+            # legitimate top-ups inside the hold window.
+            Booking.status.in_((BookingStatus.CONFIRMED, BookingStatus.PARTIALLY_REFUNDED)),
         )
         return int(await self.session.scalar(statement) or 0)
 
@@ -332,7 +331,18 @@ class PaymentRepository(BaseRepository[Payment]):
             .where(
                 Payment.id == payment_id,
                 Payment.status.in_(
-                    (PaymentStatus.CREATED, PaymentStatus.PENDING, PaymentStatus.AUTHORIZED)
+                    (
+                        PaymentStatus.CREATED,
+                        PaymentStatus.PENDING,
+                        PaymentStatus.AUTHORIZED,
+                        # FAILED is capturable on purpose. One order can carry
+                        # several attempts — a declined card followed by a
+                        # successful UPI — and this row tracks the order, not
+                        # the attempt. Excluding FAILED meant the retry's
+                        # money was taken while the booking stayed PENDING
+                        # with no refund.
+                        PaymentStatus.FAILED,
+                    )
                 ),
             )
             .values(
@@ -340,6 +350,9 @@ class PaymentRepository(BaseRepository[Payment]):
                 provider_payment_id=provider_payment_id,
                 captured_at=now,
                 method=method,
+                # The earlier attempt's failure no longer describes this row.
+                failure_reason=None,
+                failed_at=None,
             )
         )
         result = cast("CursorResult[Any]", await self.session.execute(statement))

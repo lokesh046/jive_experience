@@ -27,7 +27,7 @@ from app.core.errors import NotFoundError, PermissionDeniedError
 from app.core.pagination import PageParams
 from app.core.security import generate_opaque_token, hash_refresh_token
 from app.models.commerce import Booking, BookingStatus
-from app.models.event import Event
+from app.models.event import Event, EventStatus
 from app.models.fulfilment import CheckinResult, Ticket, TicketCheckin, TicketStatus
 from app.models.user import User, UserRole
 from app.repositories.catalogue import EventRepository
@@ -223,6 +223,22 @@ class TicketService:
                 now=now,
                 device_label=device_label,
                 message="This ticket is for a different event.",
+            )
+
+        event = await self.events.get(ticket.event_id)
+        if event is not None and event.status is EventStatus.CANCELLED:
+            # Reported before the generic status checks. The atomic UPDATE in
+            # `check_in` also refuses a cancelled event, but it refuses by
+            # affecting no rows — which reads as "already used" and writes a
+            # false double-scan into the audit trail.
+            return await self._record(
+                result=CheckinResult.CANCELLED,
+                ticket=ticket,
+                event_id=event_id,
+                staff=staff,
+                now=now,
+                device_label=device_label,
+                message="This event has been cancelled.",
             )
 
         if ticket.status is TicketStatus.CHECKED_IN:

@@ -85,7 +85,11 @@ class TicketRepository(BaseRepository[Ticket]):
             update(Ticket)
             .where(
                 Ticket.booking_id == booking_id,
-                Ticket.status == TicketStatus.ISSUED,
+                # CANCELLED included so a settled refund supersedes an earlier
+                # cancellation: an event cancelled and then refunded should
+                # leave its tickets reading REFUNDED, not frozen at CANCELLED.
+                Ticket.status.in_((TicketStatus.ISSUED, TicketStatus.CANCELLED)),
+                Ticket.status != status,
             )
             .values(status=status, invalidated_at=now)
         )

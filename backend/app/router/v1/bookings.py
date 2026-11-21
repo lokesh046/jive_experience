@@ -112,7 +112,12 @@ async def verify_checkout(
     Safe to call repeatedly, and safe to race with the webhook: whichever
     arrives first confirms, the other is a no-op.
     """
-    booking = await payments.verify_checkout(payload.provider_payment_id, customer=customer)
+    booking = await payments.verify_checkout(
+        payload.provider_payment_id,
+        customer=customer,
+        provider_order_id=payload.provider_order_id,
+        signature=payload.signature,
+    )
     if booking.reference != reference:
         raise NotFoundError("Booking not found.", code="BOOKING_NOT_FOUND")
     return BookingOut.model_validate(booking)

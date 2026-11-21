@@ -64,6 +64,25 @@ class InventoryService:
         self.categories = TicketCategoryRepository(session)
         self.bookings = BookingRepository(session)
 
+    # ------------------------------------------------------------- lock ---
+
+    async def lock_customer_event(self, user_id: uuid.UUID, event_id: uuid.UUID) -> None:
+        """Serialise one customer's attempts on one event.
+
+        A transaction-scoped advisory lock, released at commit. Narrow by
+        design: two *different* customers never contend, so a ticket drop —
+        where every buyer is a different person — sees no added
+        serialisation.
+
+        Re-entrant within a transaction, so taking it again inside `hold()`
+        is free. The booking service takes it first so that its idempotency
+        re-check happens inside the same critical section.
+        """
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:a), hashtext(:b))"),
+            {"a": str(user_id), "b": str(event_id)},
+        )
+
     # ------------------------------------------------------------ holds ---
 
     async def hold(
@@ -316,21 +335,15 @@ class InventoryService:
         a per-booking cap is defeated by booking twice, which is exactly what
         an automated buyer does.
         """
-        # Serialise this customer's attempts on this event before reading.
+        # Serialise before reading. Read-then-write let two simultaneous
+        # requests count the same existing bookings, both pass, and the
+        # customer end up over the limit — and that limit is the control the
+        # whole anti-bot plan rests on.
         #
-        # Read-then-write: two simultaneous requests both counted the same
-        # existing bookings, both passed, and the customer ended up over the
-        # limit. That is the control the whole anti-bot story rests on, so a
-        # race through it is not acceptable.
-        #
-        # A transaction-scoped advisory lock keyed on (customer, event) is
-        # narrow by design: it is released at commit, and two *different*
-        # customers never contend — so this adds no serialisation to a ticket
-        # drop, where every buyer is a different person.
-        await self.session.execute(
-            text("SELECT pg_advisory_xact_lock(hashtext(:a), hashtext(:b))"),
-            {"a": str(user_id), "b": str(event.id)},
-        )
+        # Usually already held by the booking service; re-entrant, so taking
+        # it again costs nothing and callers that reach `hold()` by another
+        # route are still protected.
+        await self.lock_customer_event(user_id, event.id)
 
         already = await self.bookings.purchased_quantity(user_id, event.id)
         holding = await self.reservations.live_for_user(user_id, event.id, now=now)

@@ -16,8 +16,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.models.commerce import Booking, BookingStatus
 from app.models.event import Event, EventCategory, EventStatus, TicketCategory
-from app.models.fulfilment import Ticket, TicketStatus
+from app.models.fulfilment import CheckinResult, Ticket, TicketStatus
 from app.models.user import User, UserRole, UserStatus
 from app.models.venue import Venue
 from app.repositories.fulfilment import TicketRepository
@@ -25,11 +26,12 @@ from app.schemas.booking import BookingCreateRequest, BookingItemRequest
 from app.services.booking import BookingService
 from app.services.inventory import InventoryService
 from app.services.outbox import OutboxService
-from app.services.ticket import hash_qr_token
+from app.services.ticket import TicketService, hash_qr_token
 from tests.integration.conftest import (
     customer_session,
     integration_database_url,
     seed_admin,
+    seed_staff,
     sign_in_as,
     unique_email,
 )
@@ -251,7 +253,11 @@ async def test_identical_idempotency_keys_race_to_one_booking(
     """The unique constraint fires at flush. Before the fix the loser raised
     instead of returning the booking that won."""
     seed, make_session, _ = racing_sessions
-    _event_id, category_id, user_id, slug = await seed(capacity=100, limit=10)
+    # limit=2 with qty=2: the loser's purchase-limit check *will* see the
+    # winner's booking. With the idempotency re-read outside the lock it
+    # refused with PURCHASE_LIMIT_EXCEEDED instead of returning that booking,
+    # which a limit of 10 would never have exposed.
+    _event_id, category_id, user_id, slug = await seed(capacity=100, limit=2)
     key = f"race-{uuid.uuid4().hex[:12]}"
 
     async def attempt() -> str:
@@ -443,3 +449,179 @@ async def test_a_failing_outbox_handler_is_retried_not_stranded(
         sa.text("SELECT status FROM outbox_messages WHERE id = :i"), {"i": message_id}
     )
     assert state == "PENDING", f"a failed job must be queued for retry, got {state}"
+
+
+# ---- second review: a retried payment must still capture -------------
+
+
+async def test_a_payment_that_failed_then_succeeded_can_still_capture(
+    db_session: AsyncSession,
+) -> None:
+    """One order, several attempts.
+
+    A declined card followed by a successful UPI is ordinary. The payment row
+    tracks the *order*, so a failed attempt used to lock it out of capture —
+    the retry's money was taken while the booking stayed PENDING, with no
+    refund and nothing to alert on.
+    """
+    from app.models.commerce import Payment, PaymentStatus
+    from app.repositories.commerce import PaymentRepository
+
+    event, _category = await make_event(db_session)
+    customer = User(role=UserRole.CUSTOMER, status=UserStatus.ACTIVE, email=unique_email("payer"))
+    db_session.add(customer)
+    await db_session.flush()
+
+    booking = Booking(
+        reference=f"JIVE-{uuid.uuid4().hex[:8].upper()}",
+        user_id=customer.id,
+        event_id=event.id,
+        status=BookingStatus.PENDING,
+        subtotal_paise=100000,
+        fees_paise=0,
+        total_paise=100000,
+        quantity=1,
+    )
+    db_session.add(booking)
+    await db_session.flush()
+
+    payment = Payment(
+        booking_id=booking.id,
+        provider="razorpay",
+        provider_order_id=f"order_{uuid.uuid4().hex[:10]}",
+        amount_paise=100000,
+        idempotency_key=f"order:{booking.id}",
+        status=PaymentStatus.FAILED,  # the first attempt was declined
+        failure_reason="card declined",
+    )
+    db_session.add(payment)
+    await db_session.flush()
+
+    captured = await PaymentRepository(db_session).mark_captured(
+        payment.id,
+        provider_payment_id=f"pay_{uuid.uuid4().hex[:10]}",
+        now=datetime.now(UTC),
+        method="upi",
+    )
+    assert captured, "a later successful attempt on the same order must capture"
+
+    await db_session.refresh(payment)
+    assert payment.status is PaymentStatus.CAPTURED
+    assert payment.failure_reason is None, "the old failure no longer describes this row"
+
+
+# ---- second review: pending bookings must be counted once ------------
+
+
+async def test_a_pending_booking_does_not_consume_the_limit_twice(
+    api: AsyncClient, google: StubGoogleClient, db_session: AsyncSession
+) -> None:
+    """A pending booking's tickets are counted by its live reservations.
+
+    Counting the booking as well charged the allowance twice, so a customer
+    with a 2-ticket hold against a 4-ticket limit could not add 2 more.
+    """
+    event, category = await make_event(db_session, capacity=50, limit=4)
+    await db_session.commit()
+
+    session = await customer_session(api, google)
+    # Booking requires a verified phone number — the control the per-account
+    # limit depends on.
+    phoned = await api.put(
+        "/api/v1/auth/phone",
+        headers=bearer(session["access"]),
+        json={"phone_e164": f"+9190{uuid.uuid4().int % 10**8:08d}"},
+    )
+    assert phoned.status_code == 200, phoned.text
+
+    body = {
+        "event_slug": event.slug,
+        "items": [{"ticket_category_id": str(category.id), "quantity": 2}],
+    }
+
+    first = await api.post("/api/v1/bookings", headers=bearer(session["access"]), json=body)
+    assert first.status_code == 201, first.text
+
+    second = await api.post("/api/v1/bookings", headers=bearer(session["access"]), json=body)
+    assert second.status_code == 201, (
+        "2 + 2 is exactly the limit of 4 and must be allowed; "
+        f"got {second.status_code} {second.text[:200]}"
+    )
+
+    third = await api.post("/api/v1/bookings", headers=bearer(session["access"]), json=body)
+    assert third.status_code == 422, "but the fifth and sixth tickets must not be"
+
+
+# ---- second review: a cancelled event must say so --------------------
+
+
+async def test_scanning_a_cancelled_event_reports_cancelled_not_already_used(
+    db_session: AsyncSession,
+) -> None:
+    """The atomic guard refuses by affecting no rows, which reads as a double
+    scan — a misleading message at the gate and a false entry in the audit."""
+    from app.services.outbox import OutboxService
+
+    event, category = await make_event(db_session)
+    staff = await seed_staff(db_session)
+    customer = User(role=UserRole.CUSTOMER, status=UserStatus.ACTIVE, email=unique_email("holder"))
+    db_session.add(customer)
+    await db_session.flush()
+
+    booking = Booking(
+        reference=f"JIVE-{uuid.uuid4().hex[:8].upper()}",
+        user_id=customer.id,
+        event_id=event.id,
+        status=BookingStatus.CONFIRMED,
+        subtotal_paise=100000,
+        fees_paise=0,
+        total_paise=100000,
+        quantity=1,
+        confirmed_at=datetime.now(UTC),
+    )
+    db_session.add(booking)
+    await db_session.flush()
+
+    from app.models.commerce import BookingItem
+
+    item = BookingItem(
+        booking_id=booking.id,
+        ticket_category_id=category.id,
+        category_name="General",
+        unit_price_paise=100000,
+        quantity=1,
+        line_total_paise=100000,
+    )
+    db_session.add(item)
+    await db_session.flush()
+
+    token = "a-valid-looking-token-for-this-test"
+    db_session.add(
+        Ticket(
+            booking_id=booking.id,
+            booking_item_id=item.id,
+            event_id=event.id,
+            ticket_category_id=category.id,
+            user_id=customer.id,
+            serial=f"T-{uuid.uuid4().hex[:8]}",
+            qr_token_hash=hash_qr_token(token),
+            status=TicketStatus.ISSUED,
+            issued_at=datetime.now(UTC),
+        )
+    )
+    # Role alone does not authorise a scan; the assignment does.
+    from app.models.fulfilment import StaffEventAssignment
+
+    db_session.add(StaffEventAssignment(user_id=staff.id, event_id=event.id))
+
+    event.status = EventStatus.CANCELLED
+    event.cancelled_at = datetime.now(UTC)
+    await db_session.flush()
+
+    service = TicketService(db_session, OutboxService(db_session))
+    outcome = await service.scan(qr_token=token, event_id=event.id, staff=staff)
+
+    assert outcome.result is CheckinResult.CANCELLED, (
+        f"expected CANCELLED, got {outcome.result}: {outcome.message}"
+    )
+    assert not outcome.ok

@@ -84,6 +84,21 @@ class BookingService:
 
         self._assert_can_book(customer)
 
+        # Take the per-customer lock *before* deciding anything, then look the
+        # key up again inside it.
+        #
+        # The check above races: two submissions of the same key both find
+        # nothing, and the loser then reaches the purchase-limit check, which
+        # now counts the winner's booking and refuses with
+        # PURCHASE_LIMIT_EXCEEDED — the opposite of what an idempotent retry
+        # should do. Re-reading inside the critical section returns the
+        # winner's booking instead.
+        if payload.idempotency_key:
+            await self.inventory.lock_customer_event(customer.id, event.id)
+            existing = await self.bookings.by_idempotency_key(customer.id, payload.idempotency_key)
+            if existing is not None:
+                return existing, False
+
         now = datetime.now(UTC)
         held = await self.inventory.hold(
             event=event,

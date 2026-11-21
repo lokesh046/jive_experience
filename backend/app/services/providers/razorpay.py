@@ -227,7 +227,10 @@ class RazorpayProvider:
             )
 
         expected = hmac.new(self._webhook_secret.encode(), body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected, signature):
+        # Compared as bytes: `compare_digest` raises TypeError on a non-ASCII
+        # str, and this header is attacker-controlled — so a junk signature
+        # would surface as a 500 rather than a clean refusal.
+        if not hmac.compare_digest(expected.encode(), signature.encode()):
             raise AuthenticationError(
                 "Invalid webhook signature.", code="WEBHOOK_SIGNATURE_INVALID"
             )
