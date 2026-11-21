@@ -148,6 +148,13 @@ class BookingService:
                 code="BOOKING_CONFLICT",
             ) from exc
 
+        # The items were added to the session directly, so this booking's
+        # `items` collection has never been loaded. Serialising the response
+        # would otherwise trigger a lazy load outside the async context and
+        # fail with MissingGreenlet. One query here, deliberately, rather than
+        # an exception at the edge.
+        await self.session.refresh(booking, attribute_names=["items"])
+
         logger.info(
             "booking_created",
             booking_id=str(booking.id),

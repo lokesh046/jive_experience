@@ -37,6 +37,7 @@ Every command: `make`
 | `make dev` | Run the API with reload |
 | `make worker` | Run the background worker (outbox + sweeper) |
 | `make token EMAIL=you@gmail.com` | Print an access token for Swagger UI |
+| `./scripts/smoke.sh` | Hit every endpoint against a running API |
 | `make test` | Run all tests |
 | `make check` | Lint + types + tests (what CI runs) |
 | `make db` / `make stop` | Start / stop PostgreSQL and Redis |
@@ -61,6 +62,30 @@ Then:
 | `http://localhost:8000/api/v1/system/health/ready` | Readiness probe (database + Redis) |
 
 ---
+
+## Checking every endpoint at once
+
+```bash
+make dev PORT=8001          # one terminal
+./scripts/smoke.sh          # another
+```
+
+Exercises all 50 checks across every endpoint group — auth, catalogue,
+booking, scanner, admin — and prints a pass/fail line each. It creates its own
+venue, event and ticket categories, so it needs no fixtures.
+
+It **writes real data** to whatever database `.env` points at. Point it at a
+local database first unless you mean to seed the real one:
+
+```bash
+DATABASE_URL="postgresql+asyncpg://jive:jive@localhost:5432/jive_events" \
+  ./scripts/smoke.sh
+```
+
+Two results are expected failures until a payment provider is chosen:
+checkout and the webhook both return 503 `PAYMENT_PROVIDER_NOT_CONFIGURED`.
+The script asserts that, so it passes today and will fail loudly the day the
+provider is wired up and the expectation needs changing.
 
 ## Trying the API in Swagger UI
 

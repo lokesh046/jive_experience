@@ -292,6 +292,21 @@ class EventAdminDetail(BaseModel):
     created_at: datetime
     ticket_categories: list[TicketCategoryAdmin] = Field(default_factory=list)
 
+    # Validated directly from the `Event` ORM row, unlike the public shapes
+    # which are built from cached dictionaries. Without this every admin event
+    # endpoint fails with "Input should be a valid dictionary".
+    model_config = {"from_attributes": True}
+
+    @field_validator("gallery_image_urls", mode="before")
+    @classmethod
+    def _gallery_default(cls, value: object) -> object:
+        """The column is nullable; the contract is "a list, possibly empty".
+
+        Coercing here keeps NULL out of the API surface, so a client never has
+        to distinguish "no gallery" from "gallery not set".
+        """
+        return value if value is not None else []
+
 
 class AvailabilityItem(BaseModel):
     ticket_category_id: uuid.UUID

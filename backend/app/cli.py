@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import secrets
 import sys
 
 from pydantic import TypeAdapter, ValidationError
@@ -88,7 +89,7 @@ async def grant_access(email: str, full_name: str, role: UserRole) -> int:
     return 0
 
 
-async def mint_dev_token(email: str) -> int:
+async def mint_dev_token(email: str, *, create_customer: bool = False) -> int:
     """Print an access token for an existing account.
 
     For exercising the API in Swagger UI or curl without running the Google
@@ -118,10 +119,28 @@ async def mint_dev_token(email: str) -> int:
     create_engine(settings)
     try:
         async with get_sessionmaker()() as session:
-            user = await UserRepository(session).by_email(validated)
+            users = UserRepository(session)
+            user = await users.by_email(validated)
+
+            if user is None and create_customer:
+                # Customers normally appear on first Google sign-in. To
+                # exercise the booking flow without a frontend, create one
+                # directly — with a phone number, since booking requires one.
+                user = User(
+                    role=UserRole.CUSTOMER,
+                    status=UserStatus.ACTIVE,
+                    email=validated,
+                    full_name="Demo Customer",
+                    phone_e164=f"+9190{secrets.randbelow(10**8):08d}",
+                )
+                users.add(user)
+                await session.commit()
+                print(f"# created CUSTOMER {validated}", file=sys.stderr)
+
             if user is None:
                 print(
-                    f"No account for {validated}. Create one with: python -m app.cli grant-admin",
+                    f"No account for {validated}. Create one with "
+                    "`grant-admin`, or pass --create-customer.",
                     file=sys.stderr,
                 )
                 return 1
@@ -157,13 +176,18 @@ def main(argv: list[str] | None = None) -> int:
 
     token = sub.add_parser("dev-token", help="Print an access token for an existing account")
     token.add_argument("--email", required=True)
+    token.add_argument(
+        "--create-customer",
+        action="store_true",
+        help="Create a CUSTOMER account (with a phone number) if none exists",
+    )
 
     args = parser.parse_args(argv)
 
     if args.command == "grant-admin":
         return asyncio.run(grant_access(args.email, args.name, UserRole(args.role)))
     if args.command == "dev-token":
-        return asyncio.run(mint_dev_token(args.email))
+        return asyncio.run(mint_dev_token(args.email, create_customer=args.create_customer))
 
     return 1  # pragma: no cover - argparse enforces a known command
 
