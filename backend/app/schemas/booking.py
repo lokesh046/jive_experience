@@ -86,11 +86,17 @@ class CheckoutResponse(BaseModel):
 class CheckoutVerifyRequest(BaseModel):
     """The browser's return from checkout.
 
-    This is a *hint* that a payment may exist, never proof. The backend asks
-    the provider before confirming anything.
+    A *hint* that a payment may exist, never proof. The backend asks the
+    provider before confirming anything.
+
+    With Razorpay, Checkout.js hands the browser `razorpay_payment_id`,
+    `razorpay_order_id` and `razorpay_signature`; send all three and the
+    signature is checked before the network call.
     """
 
     provider_payment_id: Annotated[str, Field(min_length=1, max_length=120)]
+    provider_order_id: Annotated[str | None, Field(default=None, max_length=120)] = None
+    signature: Annotated[str | None, Field(default=None, max_length=256)] = None
 
 
 class PaymentOut(BaseModel):

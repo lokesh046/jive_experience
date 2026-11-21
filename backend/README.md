@@ -463,7 +463,7 @@ Each one has a working contract behind it, so wiring it up is configuration.
 
 | Blocked | Needed | Effect today |
 |---|---|---|
-| **Payment provider** (Razorpay or Cashfree) | Merchant account + keys | `UnconfiguredPaymentProvider` refuses checkout, webhooks and refunds with `PAYMENT_PROVIDER_NOT_CONFIGURED`. Implement one adapter in `app/services/payment_provider.py`; nothing else changes |
+| **Razorpay credentials** | Test keys + webhook secret | The adapter is written and tested (`app/services/providers/razorpay.py`); it needs keys. See `docs/razorpay-setup.md`. Without them checkout and refunds refuse with `PAYMENT_PROVIDER_NOT_CONFIGURED` |
 | **Cancellation policy** numbers | Tier table per event | `refund-quote` returns `eligible: false` with a reason. Shape is settled: `{"tiers": [{"hours_before": 168, "percent": 100}]}` |
 | **Transactional email/SMS** | SMTP or provider credentials | Tickets are issued and stored; delivery is logged, not sent |
 | **Phone verification** | SMS provider | Booking requires a phone number but cannot yet verify it, so the per-account purchase limit is weaker than intended — see `docs/anti-bot.md` |
@@ -503,7 +503,8 @@ there is no second source of truth to drift.
 - **`alembic check` needs a live database**, so model/migration drift is caught
   by the integration suite rather than by the unit suite.
 - **Blocked on decisions** — see `docs/open-decisions.md`.
-- **Setup guides** — `docs/google-oauth-setup.md`, `docs/neon-setup.md`.
+- **Setup guides** — `docs/google-oauth-setup.md`, `docs/neon-setup.md`,
+  `docs/razorpay-setup.md`.
 - **Capacity target** — 5,000 seats selling out in ~2 minutes; the design this
   requires is in `docs/capacity.md`, and a load test is a Phase 4 deliverable.
 - **Bot and scalper controls** — `docs/anti-bot.md`. OTP login must gate

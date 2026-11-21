@@ -153,8 +153,24 @@ class PaymentService:
         if payment.status is PaymentStatus.CAPTURED:
             return booking
 
-        if not verified.succeeded:
+        if verified.failed:
             await self._mark_failed(payment, verified)
+            return booking
+
+        if not verified.succeeded:
+            # Authorized, or still in flight. The money is held but not taken,
+            # so nothing is confirmed and nothing is refunded — the
+            # reconciliation sweep asks again.
+            payment.status = PaymentStatus.AUTHORIZED
+            payment.provider_status = verified.provider_status
+            if verified.provider_payment_id and not payment.provider_payment_id:
+                payment.provider_payment_id = verified.provider_payment_id
+            await self.session.commit()
+            logger.info(
+                "payment_pending_capture",
+                payment_id=str(payment.id),
+                provider_status=verified.provider_status,
+            )
             return booking
 
         if verified.amount_paise != payment.amount_paise:
@@ -269,7 +285,7 @@ class PaymentService:
                 provider_order_id=envelope.provider_order_id or "",
                 amount_paise=envelope.amount_paise or 0,
                 currency="INR",
-                succeeded=envelope.succeeded,
+                state=envelope.state,
                 provider_status=envelope.event_type,
             )
             await self.confirm_from_provider(verified, source="webhook")

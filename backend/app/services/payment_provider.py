@@ -25,6 +25,20 @@ class ProviderName(StrEnum):
     UNCONFIGURED = "unconfigured"
 
 
+class ProviderPaymentState(StrEnum):
+    """A gateway payment result, normalised.
+
+    Three states, not a boolean. "Authorized but not captured" is neither
+    success nor failure: the money is held, not taken. Collapsing it into
+    `succeeded=False` would mark a live payment FAILED and refund a customer
+    who is about to be charged correctly.
+    """
+
+    SUCCEEDED = "SUCCEEDED"
+    PENDING = "PENDING"
+    FAILED = "FAILED"
+
+
 @dataclass(frozen=True, slots=True)
 class CheckoutOrder:
     """What the client needs to open the provider's hosted checkout."""
@@ -46,10 +60,18 @@ class VerifiedPayment:
     provider_order_id: str
     amount_paise: int
     currency: str
-    succeeded: bool
+    state: ProviderPaymentState
     provider_status: str
     method: str | None = None
     failure_reason: str | None = None
+
+    @property
+    def succeeded(self) -> bool:
+        return self.state is ProviderPaymentState.SUCCEEDED
+
+    @property
+    def failed(self) -> bool:
+        return self.state is ProviderPaymentState.FAILED
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,8 +83,12 @@ class WebhookEnvelope:
     provider_payment_id: str | None
     provider_order_id: str | None
     amount_paise: int | None
-    succeeded: bool
+    state: ProviderPaymentState
     payload: dict[str, Any]
+
+    @property
+    def succeeded(self) -> bool:
+        return self.state is ProviderPaymentState.SUCCEEDED
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +130,17 @@ class PaymentProvider(Protocol):
         self, *, provider_payment_id: str, amount_paise: int, idempotency_key: str
     ) -> RefundResult: ...
 
+    def verify_checkout_signature(
+        self, *, provider_order_id: str, provider_payment_id: str, signature: str
+    ) -> bool:
+        """Check the signature the client returned from hosted checkout.
+
+        Defence in depth only — the authoritative answer always comes from
+        asking the provider. A provider without client-side signatures may
+        return True.
+        """
+        ...
+
 
 class UnconfiguredPaymentProvider:
     """Used until a provider is chosen.
@@ -137,28 +174,36 @@ class UnconfiguredPaymentProvider:
     ) -> RefundResult:
         raise self._refuse()
 
+    def verify_checkout_signature(
+        self, *, provider_order_id: str, provider_payment_id: str, signature: str
+    ) -> bool:
+        raise self._refuse()
+
 
 _provider: PaymentProvider | None = None
 
 
-def get_payment_provider(configured_name: str | None) -> PaymentProvider:
-    """Return the configured adapter, or the refusing default.
-
-    When the provider is chosen, add its adapter here. Nothing else changes.
-    """
+def get_payment_provider(configured_name: str | None, settings: Any = None) -> PaymentProvider:
+    """Return the configured adapter, or the refusing default."""
     global _provider
-    if _provider is None:
-        if configured_name in (None, "", ProviderName.UNCONFIGURED.value):
-            _provider = UnconfiguredPaymentProvider()
-        else:
-            # Razorpay / Cashfree adapters land here once the merchant
-            # account exists. Until then an explicit name is a config error,
-            # not something to guess at.
-            raise RuntimeError(
-                f"PAYMENT_PROVIDER={configured_name!r} has no adapter yet. "
-                "Implement it in app/services/payment_provider.py."
-            )
-    return _provider
+    if _provider is not None:
+        return _provider
+
+    if configured_name in (None, "", ProviderName.UNCONFIGURED.value):
+        _provider = UnconfiguredPaymentProvider()
+        return _provider
+
+    if configured_name == ProviderName.RAZORPAY.value:
+        from app.core.config import get_settings
+        from app.services.providers.razorpay import RazorpayProvider
+
+        _provider = RazorpayProvider(settings or get_settings())
+        return _provider
+
+    raise RuntimeError(
+        f"PAYMENT_PROVIDER={configured_name!r} has no adapter. "
+        "Implement it under app/services/providers/."
+    )
 
 
 def set_payment_provider(provider: PaymentProvider | None) -> None:

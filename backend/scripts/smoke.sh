@@ -44,6 +44,24 @@ check() {
 
 jq_get() { printf '%s' "$1" | $PY -c "import sys,json;d=json.load(sys.stdin);print(d$2)" 2>/dev/null; }
 
+# check_any <name> <space-separated acceptable statuses> <curl args...>
+check_any() {
+  local name="$1" expected="$2"; shift 2
+  local body status
+  body="$(curl -s -w $'\n%{http_code}' "$@")"
+  status="${body##*$'\n'}"
+  body="${body%$'\n'*}"
+  if [[ " $expected " == *" $status "* ]]; then
+    printf '  %s✓%s %-52s %s\n' "$green" "$off" "$name" "$status"
+    pass=$((pass+1))
+  else
+    printf '  %s✗%s %-52s %s (expected one of: %s)\n' "$red" "$off" "$name" "$status" "$expected"
+    printf '      %s%s%s\n' "$dim" "${body:0:200}" "$off"
+    fail=$((fail+1))
+  fi
+  LAST_BODY="$body"
+}
+
 section() { printf '\n%s%s%s\n' "$bold" "$1" "$off"; }
 
 # --------------------------------------------------------------- tokens ---
@@ -147,13 +165,17 @@ else
   check "GET  /bookings/{ref}/refund-quote" 200 "$API/bookings/$BOOKING_REF/refund-quote" "${AUTH_CUST[@]}"
   check "GET  /tickets"                  200 "$API/tickets" "${AUTH_CUST[@]}"
 
-  # Expected to refuse: no payment provider is configured yet.
-  check "POST /bookings/{ref}/checkout (provider unset)" 503 -X POST "$API/bookings/$BOOKING_REF/checkout" "${AUTH_CUST[@]}"
+  # 503 when no provider is configured; 200 once Razorpay test keys are set
+  # and the order is created at the gateway.
+  check_any "POST /bookings/{ref}/checkout" "200 503" -X POST "$API/bookings/$BOOKING_REF/checkout" "${AUTH_CUST[@]}"
+  CHECKOUT_STATUS_BODY="$LAST_BODY"
 fi
 
 # ---------------------------------------------------------------- payments ---
 section "Payments"
-check "POST /payments/webhook (unsigned)" 503 -X POST "$API/payments/webhook" "${JSON[@]}" -d '{"event":"payment.captured"}'
+# Unsigned: 503 with no provider, 401 once Razorpay is configured — either
+# way it must never be accepted.
+check_any "POST /payments/webhook (unsigned)" "401 503" -X POST "$API/payments/webhook" "${JSON[@]}" -d '{"event":"payment.captured"}'
 
 # ----------------------------------------------------------------- scanner ---
 section "Event staff — scanner"
