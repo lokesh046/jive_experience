@@ -203,33 +203,45 @@ class Worker:
 
     async def _handle(self, session: AsyncSession, message: OutboxMessage) -> None:
         repository = OutboxRepository(session)
-        handler = HANDLERS.get(message.topic)
-        log = logger.bind(outbox_id=str(message.id), topic=message.topic, attempt=message.attempts)
+
+        # Copy everything needed before the handler runs. A rollback expires
+        # these attributes, and reading them afterwards triggers a lazy
+        # refresh outside the async context — MissingGreenlet — which leaves
+        # the message stuck in PROCESSING until the stale-lock sweep, turning
+        # one failed job into a fifteen-minute stall.
+        message_id = message.id
+        topic = message.topic
+        payload = message.payload
+        attempts = message.attempts
+        max_attempts = message.max_attempts
+
+        handler = HANDLERS.get(topic)
+        log = logger.bind(outbox_id=str(message_id), topic=topic, attempt=attempts)
 
         if handler is None:
             # An unknown topic is a deployment mismatch, not a transient
             # fault; retrying forever would hide it.
-            await repository.mark_failed(message.id, error="No handler for topic")
+            await repository.mark_failed(message_id, error="No handler for topic")
             await session.commit()
             log.error("outbox_no_handler")
             return
 
         try:
-            await handler(session, message.payload)
+            await handler(session, payload)
         except Exception as exc:
             await session.rollback()
-            if message.attempts >= message.max_attempts:
-                await repository.mark_failed(message.id, error=str(exc))
+            if attempts >= max_attempts:
+                await repository.mark_failed(message_id, error=str(exc))
                 await session.commit()
                 log.error("outbox_message_failed_permanently", error=str(exc))
                 return
-            retry_at = datetime.now(UTC) + retry_delay(message.attempts)
-            await repository.mark_retry(message.id, retry_at=retry_at, error=str(exc))
+            retry_at = datetime.now(UTC) + retry_delay(attempts)
+            await repository.mark_retry(message_id, retry_at=retry_at, error=str(exc))
             await session.commit()
             log.warning("outbox_message_retry", error=str(exc), retry_at=retry_at.isoformat())
             return
 
-        await repository.mark_done(message.id, now=datetime.now(UTC))
+        await repository.mark_done(message_id, now=datetime.now(UTC))
         await session.commit()
         log.info("outbox_message_done")
 

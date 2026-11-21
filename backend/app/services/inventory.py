@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import structlog
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import BusinessRuleError, ConflictError, NotFoundError
@@ -315,6 +316,22 @@ class InventoryService:
         a per-booking cap is defeated by booking twice, which is exactly what
         an automated buyer does.
         """
+        # Serialise this customer's attempts on this event before reading.
+        #
+        # Read-then-write: two simultaneous requests both counted the same
+        # existing bookings, both passed, and the customer ended up over the
+        # limit. That is the control the whole anti-bot story rests on, so a
+        # race through it is not acceptable.
+        #
+        # A transaction-scoped advisory lock keyed on (customer, event) is
+        # narrow by design: it is released at commit, and two *different*
+        # customers never contend — so this adds no serialisation to a ticket
+        # drop, where every buyer is a different person.
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:a), hashtext(:b))"),
+            {"a": str(user_id), "b": str(event.id)},
+        )
+
         already = await self.bookings.purchased_quantity(user_id, event.id)
         holding = await self.reservations.live_for_user(user_id, event.id, now=now)
         limit = event.max_tickets_per_customer

@@ -71,11 +71,19 @@ class UserService:
                     "That email already has staff access.", code="ALREADY_PRIVILEGED"
                 )
             previous_role = existing.role
+            now = datetime.now(UTC)
             existing.role = payload.role
             existing.status = UserStatus.ACTIVE
-            # Their current tokens carry the old role. Force a fresh sign-in
-            # so nothing is running with a stale claim.
-            existing.sessions_valid_from = datetime.now(UTC)
+
+            # End every session, not just the access tokens. The cutoff alone
+            # would leave this account's refresh tokens alive, and a refresh
+            # mints a token carrying the *new* role — so a refresh token
+            # stolen while they were an ordinary customer would silently
+            # become an admin credential the moment access is granted.
+            existing.sessions_valid_from = now
+            await self.tokens.revoke_all_for_user(
+                existing.id, reason=TokenRevocationReason.ADMIN_REVOKED, at=now
+            )
             if payload.full_name:
                 existing.full_name = payload.full_name.strip()
 

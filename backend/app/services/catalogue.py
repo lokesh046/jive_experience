@@ -27,6 +27,7 @@ from app.models.event import (
     EventStatus,
     TicketCategory,
 )
+from app.models.fulfilment import TicketStatus
 from app.models.user import User
 from app.models.venue import Venue
 from app.repositories.catalogue import (
@@ -35,6 +36,7 @@ from app.repositories.catalogue import (
     VenueRepository,
 )
 from app.repositories.commerce import InventoryRepository
+from app.repositories.fulfilment import TicketRepository
 from app.schemas.catalogue import (
     AvailabilityItem,
     EventAvailability,
@@ -82,6 +84,7 @@ class CatalogueService:
         self.events = EventRepository(session)
         self.categories = TicketCategoryRepository(session)
         self.inventory = InventoryRepository(session)
+        self.tickets = TicketRepository(session)
         self.audit = AuditService(session)
 
     # ------------------------------------------------------------ venues ---
@@ -125,9 +128,14 @@ class CatalogueService:
             after={"name": venue.name, "city": venue.city},
         )
         await self.session.commit()
-        # A venue rename or move changes every event card that shows it.
+
+        # A venue rename or move changes every event that shows it — the
+        # cards in the listing and the venue block on each detail page. The
+        # detail entries have their own keys, so clearing the lists alone
+        # would leave the old address on screen until the TTL expired.
         await self.cache.invalidate_lists()
         await self.cache.invalidate_cities()
+        await self.cache.invalidate_details(list(await self.events.slugs_at_venue(venue_id)))
         return venue
 
     async def list_venues(self, params: PageParams) -> tuple[Sequence[Venue], int]:
@@ -408,9 +416,19 @@ class CatalogueService:
                 "This event is already cancelled.", code="EVENT_ALREADY_CANCELLED"
             )
 
+        now = datetime.now(UTC)
         event.status = EventStatus.CANCELLED
-        event.cancelled_at = datetime.now(UTC)
+        event.cancelled_at = now
         event.cancellation_reason = reason
+
+        # Void every unused ticket here, in the same transaction that cancels
+        # the event — not in the refund job. Refunds are batched and may be
+        # declined entirely (`refund_bookings=False`), and a ticket that
+        # still reads ISSUED is one the gate will accept. Money is settled
+        # asynchronously; admission is not.
+        voided = await self.tickets.invalidate_for_event(
+            event.id, status=TicketStatus.CANCELLED, now=now
+        )
 
         if refund_bookings:
             await outbox.enqueue(
@@ -424,7 +442,11 @@ class CatalogueService:
             entity_type="event",
             entity_id=event.id,
             actor=actor,
-            after={"reason": reason, "refund_bookings": refund_bookings},
+            after={
+                "reason": reason,
+                "refund_bookings": refund_bookings,
+                "tickets_voided": voided,
+            },
         )
         await self.session.commit()
         await self.cache.invalidate_event(slug=event.slug, event_id=str(event.id))
@@ -432,6 +454,7 @@ class CatalogueService:
             "event_cancelled",
             event_id=str(event.id),
             refund_bookings=refund_bookings,
+            tickets_voided=voided,
         )
         return event
 

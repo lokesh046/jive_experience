@@ -114,32 +114,47 @@ class BookingService:
             expires_at=now + timedelta(seconds=self.settings.reservation_hold_seconds),
             customer_note=payload.customer_note,
         )
-        self.bookings.add(booking)
-        await self.session.flush()
-
-        for item in held:
-            self.session.add(
-                BookingItem(
-                    booking_id=booking.id,
-                    ticket_category_id=item.ticket_category.id,
-                    category_name=item.ticket_category.name,
-                    unit_price_paise=item.unit_price_paise,
-                    quantity=item.quantity,
-                    line_total_paise=item.line_total_paise,
-                )
-            )
-
-        await self.inventory.attach_to_booking([item.reservation_id for item in held], booking.id)
+        # Read before anything can roll back: SQLAlchemy expires loaded
+        # objects on rollback, so re-reading `customer.id` afterwards would
+        # trigger a lazy refresh outside the async context.
+        customer_id = customer.id
 
         try:
+            # Everything that can violate a constraint belongs inside this
+            # block. The unique key on (user_id, idempotency_key) is enforced
+            # on the INSERT — at flush, not at commit — so a flush outside
+            # the handler turns a racing retry into a 500 instead of
+            # returning the booking that won.
+            self.bookings.add(booking)
+            await self.session.flush()
+
+            # Only now does `booking.id` exist: it is a server default, so it
+            # is populated by the flush above. Building the items before that
+            # gives every one of them a NULL foreign key.
+            for item in held:
+                self.session.add(
+                    BookingItem(
+                        booking_id=booking.id,
+                        ticket_category_id=item.ticket_category.id,
+                        category_name=item.ticket_category.name,
+                        unit_price_paise=item.unit_price_paise,
+                        quantity=item.quantity,
+                        line_total_paise=item.line_total_paise,
+                    )
+                )
+
+            await self.inventory.attach_to_booking(
+                [item.reservation_id for item in held], booking.id
+            )
             await self.session.commit()
         except IntegrityError as exc:
+            logger.info("booking_integrity_conflict", detail=str(exc.orig)[:200])
             await self.session.rollback()
             # Two requests with the same idempotency key raced; the unique
             # constraint caught the loser. Return the winner's booking.
             if payload.idempotency_key:
                 existing = await self.bookings.by_idempotency_key(
-                    customer.id, payload.idempotency_key
+                    customer_id, payload.idempotency_key
                 )
                 if existing is not None:
                     return existing, False

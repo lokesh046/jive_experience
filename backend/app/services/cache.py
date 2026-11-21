@@ -121,6 +121,11 @@ class CatalogueCache:
     async def invalidate_cities(self) -> None:
         await self._delete([self.cities_key()])
 
+    async def invalidate_details(self, slugs: list[str]) -> None:
+        """Drop the cached detail page of specific events."""
+        if slugs:
+            await self._delete([self.detail_key(slug) for slug in slugs])
+
     async def _delete(self, keys: list[str]) -> None:
         try:
             await self._redis.delete(*keys)

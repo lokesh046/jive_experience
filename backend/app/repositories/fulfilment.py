@@ -11,6 +11,7 @@ from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.orm import joinedload
 
 from app.core.pagination import PageParams
+from app.models.event import Event, EventStatus
 from app.models.fulfilment import (
     OutboxMessage,
     OutboxStatus,
@@ -45,13 +46,28 @@ class TicketRepository(BaseRepository[Ticket]):
     async def check_in(self, ticket_id: uuid.UUID, *, now: datetime) -> bool:
         """Mark a ticket used — atomically, and only once.
 
-        The `status == ISSUED` guard is the entire double-scan defence: two
+        The `status == ISSUED` guard is the double-scan defence: two
         simultaneous scans of the same QR both run this UPDATE, PostgreSQL
         serialises them, and exactly one sees a row affected.
+
+        The event condition is the second half. Cancelling an event voids its
+        tickets through a background job, so between the cancellation and the
+        worker finishing there is a window where a ticket still reads ISSUED.
+        Checking the event's status inside the same statement closes it: a
+        cancelled show cannot admit anyone, whatever the ticket row says.
         """
+        live_event = (
+            select(Event.id)
+            .where(Event.id == Ticket.event_id, Event.status != EventStatus.CANCELLED)
+            .exists()
+        )
         statement = (
             update(Ticket)
-            .where(Ticket.id == ticket_id, Ticket.status == TicketStatus.ISSUED)
+            .where(
+                Ticket.id == ticket_id,
+                Ticket.status == TicketStatus.ISSUED,
+                live_event,
+            )
             .values(status=TicketStatus.CHECKED_IN, checked_in_at=now)
         )
         result = cast("CursorResult[Any]", await self.session.execute(statement))
@@ -71,6 +87,22 @@ class TicketRepository(BaseRepository[Ticket]):
                 Ticket.booking_id == booking_id,
                 Ticket.status == TicketStatus.ISSUED,
             )
+            .values(status=status, invalidated_at=now)
+        )
+        result = cast("CursorResult[Any]", await self.session.execute(statement))
+        return result.rowcount or 0
+
+    async def invalidate_for_event(
+        self, event_id: uuid.UUID, *, status: TicketStatus, now: datetime
+    ) -> int:
+        """Void every unused ticket for an event.
+
+        Checked-in tickets are left alone: those people already attended, and
+        rewriting that would corrupt the attendance record.
+        """
+        statement = (
+            update(Ticket)
+            .where(Ticket.event_id == event_id, Ticket.status == TicketStatus.ISSUED)
             .values(status=status, invalidated_at=now)
         )
         result = cast("CursorResult[Any]", await self.session.execute(statement))
