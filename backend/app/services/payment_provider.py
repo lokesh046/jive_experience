@@ -118,6 +118,15 @@ class PaymentProvider(Protocol):
         """
         ...
 
+    async def fetch_payments_for_order(self, provider_order_id: str) -> list[VerifiedPayment]:
+        """Every payment attempt against an order.
+
+        Needed when a customer pays and closes the tab before the callback:
+        we hold the order we created and nothing else, so this is the only
+        way left to discover the payment.
+        """
+        ...
+
     def parse_webhook(self, *, body: bytes, headers: dict[str, str]) -> WebhookEnvelope:
         """Verify the signature and normalise the event.
 
@@ -164,6 +173,9 @@ class UnconfiguredPaymentProvider:
         raise self._refuse()
 
     async def fetch_payment(self, provider_payment_id: str) -> VerifiedPayment:
+        raise self._refuse()
+
+    async def fetch_payments_for_order(self, provider_order_id: str) -> list[VerifiedPayment]:
         raise self._refuse()
 
     def parse_webhook(self, *, body: bytes, headers: dict[str, str]) -> WebhookEnvelope:

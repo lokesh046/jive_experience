@@ -278,12 +278,26 @@ class AuthService:
             raise AuthenticationError("Invalid refresh token.", code="REFRESH_INVALID")
         self._assert_account_usable(user)
 
+        # Claim the token before minting anything. Checking `revoked_at` and
+        # then writing it let two simultaneous refreshes both pass the check
+        # and both issue a replacement — one credential becoming two live
+        # sessions, and the rotation chain that reuse detection relies on
+        # quietly forking into two.
+        if not await self.tokens.claim_for_rotation(stored.id, now=now):
+            # Another request rotated it microseconds ago. Deliberately *not*
+            # treated as reuse: a double-tapped button is not theft, and
+            # revoking the family would sign the customer out for it. The
+            # other response carries the new pair.
+            await self.session.commit()
+            logger.info("refresh_race_lost", user_id=str(stored.user_id))
+            raise AuthenticationError(
+                "This token was just refreshed. Please retry with the new one.",
+                code="REFRESH_IN_PROGRESS",
+            )
+
         issued, replacement = await self._issue(
             user, context=context, new_session=False, family_id=stored.family_id
         )
-
-        stored.revoked_at = now
-        stored.revocation_reason = TokenRevocationReason.ROTATED
         stored.replaced_by_id = replacement.id
         await self.session.commit()
         return issued

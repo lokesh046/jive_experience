@@ -48,6 +48,7 @@ from app.services.outbox import (
     TOPIC_BOOKING_CANCELLED,
     TOPIC_BOOKING_CONFIRMED,
     TOPIC_EVENT_CANCELLED,
+    TOPIC_PAYMENT_CAPTURED,
     TOPIC_REFUND_COMPLETED,
     TOPIC_REFUND_PROCESS,
     TOPIC_TICKETS_ISSUED,
@@ -81,6 +82,26 @@ async def handle_booking_confirmed(session: AsyncSession, payload: dict[str, Any
     tickets = TicketService(session, outbox)
     issued = await tickets.issue_for_booking(booking_id)
     logger.info("booking_confirmed_handled", booking_id=str(booking_id), tickets=len(issued))
+
+
+async def handle_payment_captured(session: AsyncSession, payload: dict[str, Any]) -> None:
+    """Finish a captured payment: confirm the booking, or refund it.
+
+    The durable half of capture. The message is written in the same
+    transaction as the capture itself, so if the API died in between, this is
+    what completes the job rather than leaving a charged customer with a
+    pending booking.
+    """
+    settings = get_settings()
+    outbox = OutboxService(session)
+    provider = get_payment_provider(settings.payment_provider, settings)
+    inventory = InventoryService(session, settings.reservation_hold_seconds)
+    bookings = BookingService(session, settings, inventory, outbox)
+    refunds = RefundService(session, settings, provider, outbox)
+    payments = PaymentService(session, settings, provider, bookings, refunds)
+
+    await payments.finalise_captured(uuid.UUID(payload["payment_id"]))
+    logger.info("payment_captured_finalised", payment_id=payload["payment_id"])
 
 
 async def handle_tickets_issued(session: AsyncSession, payload: dict[str, Any]) -> None:
@@ -142,6 +163,7 @@ async def handle_notification(session: AsyncSession, payload: dict[str, Any]) ->
 
 
 HANDLERS: dict[str, Handler] = {
+    TOPIC_PAYMENT_CAPTURED: handle_payment_captured,
     TOPIC_BOOKING_CONFIRMED: handle_booking_confirmed,
     TOPIC_TICKETS_ISSUED: handle_tickets_issued,
     TOPIC_REFUND_PROCESS: handle_refund_process,

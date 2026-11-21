@@ -28,6 +28,7 @@ logger = structlog.get_logger(__name__)
 # Every topic the worker knows how to handle. Producers import these rather
 # than writing the string, so a typo is an ImportError instead of a message
 # that sits in the queue until someone notices.
+TOPIC_PAYMENT_CAPTURED = "payment.captured"
 TOPIC_BOOKING_CONFIRMED = "booking.confirmed"
 TOPIC_TICKETS_ISSUED = "tickets.issued"
 TOPIC_BOOKING_CANCELLED = "booking.cancelled"

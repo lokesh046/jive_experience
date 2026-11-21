@@ -40,6 +40,7 @@ from app.repositories.commerce import (
 )
 from app.services.audit import AuditService
 from app.services.booking import BookingService
+from app.services.outbox import TOPIC_PAYMENT_CAPTURED, OutboxService
 from app.services.payment_provider import (
     CheckoutOrder,
     PaymentProvider,
@@ -65,6 +66,7 @@ class PaymentService:
         self.provider = provider
         self.booking_service = bookings
         self.refund_service = refunds
+        self.outbox = OutboxService(session)
         self.payments = PaymentRepository(session)
         self.bookings = BookingRepository(session)
         self.webhooks = WebhookEventRepository(session)
@@ -151,6 +153,18 @@ class PaymentService:
             return None
 
         if payment.status is PaymentStatus.CAPTURED:
+            # Captured, but is it finished? A crash between the capture
+            # commit and confirmation used to end here, leaving the customer
+            # charged with a PENDING booking, no tickets and no refund —
+            # and nothing to repair it, since reconciliation only scans
+            # payments that are still in flight.
+            if booking.status is BookingStatus.PENDING:
+                logger.warning(
+                    "captured_payment_not_finalised",
+                    payment_id=str(payment.id),
+                    booking_id=str(booking.id),
+                )
+                await self._finalise(booking, payment)
             return booking
 
         if verified.failed:
@@ -203,26 +217,65 @@ class PaymentService:
             await self.session.commit()
             return booking
 
+        # Queued in the same transaction as the capture. If this process dies
+        # before fulfilment runs, the message survives and the worker finishes
+        # the job — the capture and the obligation it creates commit together
+        # or not at all.
+        await self.outbox.enqueue(
+            topic=TOPIC_PAYMENT_CAPTURED,
+            payload={"payment_id": str(payment.id), "booking_id": str(booking.id)},
+            dedup_key=f"payment.captured:{payment.id}",
+        )
         await self.session.commit()
 
-        confirmed = await self.booking_service.confirm_paid(booking)
-        if not confirmed and booking.status is not BookingStatus.CONFIRMED:
-            # Paid, but the tickets are gone. Refund rather than keep money
-            # for seats that cannot be honoured.
-            logger.error(
-                "payment_captured_without_inventory",
-                booking_id=str(booking.id),
-                payment_id=str(payment.id),
-            )
-            await self.refund_service.request_refund(
-                booking=booking,
-                payment=payment,
-                amount_paise=payment.amount_paise,
-                reason=RefundReason.INVENTORY_UNAVAILABLE,
-                actor=None,
-                note="Inventory unavailable after payment captured",
-            )
+        await self._finalise(booking, payment)
         return booking
+
+    async def _finalise(self, booking: Booking, payment: Payment) -> None:
+        """Turn a captured payment into tickets, or into a refund.
+
+        Idempotent and safe to re-run: `confirm_paid` only acts on a PENDING
+        booking, and `request_refund` refuses when one is already open. Both
+        the inline path and the worker call this.
+        """
+        confirmed = await self.booking_service.confirm_paid(booking)
+        if confirmed or booking.status is BookingStatus.CONFIRMED:
+            return
+
+        # Paid, but the tickets are gone. Refund rather than keep money for
+        # seats that cannot be honoured.
+        logger.error(
+            "payment_captured_without_inventory",
+            booking_id=str(booking.id),
+            payment_id=str(payment.id),
+        )
+        await self.refund_service.request_refund(
+            booking=booking,
+            payment=payment,
+            amount_paise=payment.amount_paise,
+            reason=RefundReason.INVENTORY_UNAVAILABLE,
+            actor=None,
+            note="Inventory unavailable after payment captured",
+        )
+
+        # Close the booking out. Left PENDING it would sit there with a refund
+        # in flight — ambiguous in the dashboard, and the expiry sweeper would
+        # later relabel it EXPIRED, hiding the fact that money was taken and
+        # returned.
+        booking.status = BookingStatus.CANCELLED
+        booking.cancelled_at = datetime.now(UTC)
+        booking.cancellation_reason = RefundReason.INVENTORY_UNAVAILABLE.value
+        await self.session.commit()
+
+    async def finalise_captured(self, payment_id: uuid.UUID) -> None:
+        """Worker entry point for the durable fulfilment step."""
+        payment = await self.payments.get(payment_id)
+        if payment is None or payment.status is not PaymentStatus.CAPTURED:
+            return
+        booking = await self.bookings.get(payment.booking_id)
+        if booking is None:
+            return
+        await self._finalise(booking, payment)
 
     async def verify_checkout(
         self,
@@ -291,13 +344,29 @@ class PaymentService:
         try:
             await self.session.commit()
         except IntegrityError:
-            # Already handled. Providers retry; this is routine.
             await self.session.rollback()
+            existing = await self.webhooks.by_provider_event_id(
+                self.provider.name, envelope.provider_event_id
+            )
+            if existing is not None and existing.processed_at is not None:
+                # Genuinely handled. Providers retry; this is routine.
+                logger.info(
+                    "webhook_duplicate_ignored",
+                    provider_event_id=envelope.provider_event_id,
+                )
+                return "duplicate"
+
+            # Recorded but never finished — the first attempt died partway.
+            # Treating that as a duplicate dropped the event permanently, so
+            # a single transient failure meant a payment that never confirmed.
+            # Processing is idempotent, so retrying is safe.
             logger.info(
-                "webhook_duplicate_ignored",
+                "webhook_retrying_unprocessed",
                 provider_event_id=envelope.provider_event_id,
             )
-            return "duplicate"
+            if existing is None:
+                return "duplicate"
+            record = existing
 
         if not envelope.provider_payment_id:
             await self._mark_webhook_processed(record.id)
@@ -348,22 +417,60 @@ class PaymentService:
 
         reconciled = 0
         for payment in stale:
-            if not payment.provider_payment_id:
-                continue
+            # Read before the attempt. A rollback expires the object, and
+            # reading its id afterwards raises MissingGreenlet — inside the
+            # handler for the *original* error, which would abandon every
+            # remaining row in the batch.
+            payment_id = payment.id
+            provider_payment_id = payment.provider_payment_id
+            provider_order_id = payment.provider_order_id
+
             try:
-                verified = await self.provider.fetch_payment(payment.provider_payment_id)
+                verified = await self._verified_for(provider_payment_id, provider_order_id)
+                if verified is None:
+                    continue
                 await self.confirm_from_provider(verified, source="reconciliation")
-                payment.reconciled_at = datetime.now(UTC)
+                refreshed = await self.payments.get(payment_id)
+                if refreshed is not None:
+                    refreshed.reconciled_at = datetime.now(UTC)
                 await self.session.commit()
                 reconciled += 1
             except Exception as exc:
                 await self.session.rollback()
                 logger.warning(
                     "payment_reconciliation_failed",
-                    payment_id=str(payment.id),
+                    payment_id=str(payment_id),
                     error=str(exc),
                 )
         return reconciled
+
+    async def _verified_for(
+        self, provider_payment_id: str | None, provider_order_id: str | None
+    ) -> VerifiedPayment | None:
+        """Ask the provider what happened — by payment id, or by order id.
+
+        The order-id path is what closes a real gap: a customer who pays and
+        then closes the tab leaves us holding only the order we created, and
+        without this that payment is never reconciled. Money taken, nothing
+        delivered, nothing to alert on.
+        """
+        if provider_payment_id:
+            return await self.provider.fetch_payment(provider_payment_id)
+
+        if not provider_order_id:
+            return None
+
+        lookup = getattr(self.provider, "fetch_payments_for_order", None)
+        if lookup is None:
+            return None
+
+        attempts: list[VerifiedPayment] = await lookup(provider_order_id)
+        # Prefer a successful attempt: one order can carry a declined card and
+        # a successful UPI, and only the latter should confirm a booking.
+        for attempt in attempts:
+            if attempt.succeeded:
+                return attempt
+        return attempts[0] if attempts else None
 
     # ------------------------------------------------------------ helpers ---
 

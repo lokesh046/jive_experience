@@ -18,6 +18,24 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
     async def by_hash(self, token_hash: str) -> RefreshToken | None:
         return await self.find_one(RefreshToken.token_hash == token_hash)
 
+    async def claim_for_rotation(self, token_id: uuid.UUID, *, now: datetime) -> bool:
+        """Take exclusive ownership of a token so it can be rotated once.
+
+        Read-then-write let two simultaneous refreshes both see the token as
+        live and both issue a replacement — one credential becoming two
+        sessions, and the rotation chain that reuse detection depends on
+        silently forking.
+
+        One conditional UPDATE: PostgreSQL serialises them, and exactly one
+        sees a row affected.
+        """
+        affected = await self._execute_rowcount(
+            update(RefreshToken)
+            .where(RefreshToken.id == token_id, RefreshToken.revoked_at.is_(None))
+            .values(revoked_at=now, revocation_reason=TokenRevocationReason.ROTATED)
+        )
+        return affected == 1
+
     async def revoke_family(
         self,
         family_id: uuid.UUID,

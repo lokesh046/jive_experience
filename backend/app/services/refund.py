@@ -328,14 +328,27 @@ class RefundService:
         booking = await self.bookings.get(refund.booking_id)
         if booking is not None:
             booking.refunded_paise += refund.amount_paise
+            fully_refunded = booking.refunded_paise >= booking.total_paise
             booking.status = (
-                BookingStatus.REFUNDED
-                if booking.refunded_paise >= booking.total_paise
-                else BookingStatus.PARTIALLY_REFUNDED
+                BookingStatus.REFUNDED if fully_refunded else BookingStatus.PARTIALLY_REFUNDED
             )
-            await self.tickets.invalidate_for_booking(
-                booking.id, status=TicketStatus.REFUNDED, now=now
-            )
+
+            # Only a full refund voids the tickets. Refunds are not linked to
+            # individual tickets yet, so voiding on a partial refund takes
+            # away seats the customer has still paid for — refund one of four
+            # and lose all four. Until ticket-level refunds exist, a partial
+            # refund returns money and leaves admission intact.
+            if fully_refunded:
+                await self.tickets.invalidate_for_booking(
+                    booking.id, status=TicketStatus.REFUNDED, now=now
+                )
+            else:
+                logger.info(
+                    "partial_refund_tickets_retained",
+                    booking_id=str(booking.id),
+                    refunded_paise=booking.refunded_paise,
+                    total_paise=booking.total_paise,
+                )
 
         payment.status = (
             PaymentStatus.REFUNDED
@@ -360,15 +373,19 @@ class RefundService:
         pending = await self.refunds.in_flight(limit=limit)
         updated = 0
         for refund in pending:
+            # Captured before the attempt: a rollback expires the object, and
+            # reading its id in the error handler would raise MissingGreenlet
+            # and abandon the rest of the batch.
+            refund_id = refund.id
             try:
-                status = await self.process_pending(refund.id)
+                status = await self.process_pending(refund_id)
                 if status is RefundStatus.SUCCEEDED:
                     updated += 1
             except Exception as exc:
                 await self.session.rollback()
                 logger.warning(
                     "refund_reconciliation_failed",
-                    refund_id=str(refund.id),
+                    refund_id=str(refund_id),
                     error=str(exc),
                 )
         return updated

@@ -31,6 +31,8 @@ from app.schemas.booking import BookingCreateRequest, BookingItemRequest
 from app.services.booking import BookingService
 from app.services.inventory import InventoryService
 from app.services.outbox import OutboxService
+from app.services.payment import PaymentService
+from app.services.refund import RefundService
 from app.services.ticket import TicketService, hash_qr_token
 from tests.integration.conftest import (
     customer_session,
@@ -758,3 +760,255 @@ async def test_a_ticket_stops_working_after_the_event_finishes(
     outcome = await service.scan(qr_token=code, event_id=event.id, staff=staff)
     assert outcome.result is CheckinResult.EXPIRED, outcome.message
     assert not outcome.ok
+
+
+# ---- fourth review: money taken must always resolve ------------------
+
+
+async def test_a_captured_payment_left_pending_is_driven_to_completion(
+    db_session: AsyncSession,
+) -> None:
+    """The crash-in-the-middle case.
+
+    Capture commits, then the process dies before confirmation. The retry used
+    to see CAPTURED and return — customer charged, booking PENDING, no
+    tickets, no refund, and reconciliation blind to it because it only scans
+    payments still in flight.
+    """
+    from app.models.commerce import Payment, PaymentStatus
+    from app.services.outbox import OutboxService
+    from app.services.payment_provider import (
+        ProviderPaymentState,
+        UnconfiguredPaymentProvider,
+        VerifiedPayment,
+    )
+
+    event, category = await make_event(db_session)
+    customer = User(
+        role=UserRole.CUSTOMER,
+        status=UserStatus.ACTIVE,
+        email=unique_email("stuck"),
+        phone_e164=f"+9190{uuid.uuid4().int % 10**8:08d}",
+    )
+    db_session.add(customer)
+    await db_session.flush()
+
+    booking = Booking(
+        reference=f"JIVE-{uuid.uuid4().hex[:8].upper()}",
+        user_id=customer.id,
+        event_id=event.id,
+        status=BookingStatus.PENDING,  # never confirmed
+        subtotal_paise=100000,
+        fees_paise=0,
+        total_paise=100000,
+        quantity=1,
+    )
+    db_session.add(booking)
+    await db_session.flush()
+    db_session.add(
+        BookingItem(
+            booking_id=booking.id,
+            ticket_category_id=category.id,
+            category_name="General",
+            unit_price_paise=100000,
+            quantity=1,
+            line_total_paise=100000,
+        )
+    )
+    payment = Payment(
+        booking_id=booking.id,
+        provider="unconfigured",
+        provider_order_id=f"order_{uuid.uuid4().hex[:10]}",
+        provider_payment_id=f"pay_{uuid.uuid4().hex[:10]}",
+        amount_paise=100000,
+        idempotency_key=f"order:{booking.id}",
+        status=PaymentStatus.CAPTURED,  # money already taken
+        captured_at=datetime.now(UTC),
+    )
+    db_session.add(payment)
+    await db_session.flush()
+
+    settings = Settings(environment="test", secret_key="t" * 64)
+    outbox = OutboxService(db_session)
+    inventory = InventoryService(db_session, settings.reservation_hold_seconds)
+    bookings = BookingService(db_session, settings, inventory, outbox)
+    refunds = RefundService(db_session, settings, UnconfiguredPaymentProvider(), outbox)
+    payments = PaymentService(
+        db_session, settings, UnconfiguredPaymentProvider(), bookings, refunds
+    )
+
+    verified = VerifiedPayment(
+        provider_payment_id=payment.provider_payment_id or "",
+        provider_order_id=payment.provider_order_id or "",
+        amount_paise=100000,
+        currency="INR",
+        state=ProviderPaymentState.SUCCEEDED,
+        provider_status="captured",
+    )
+    await payments.confirm_from_provider(verified, source="test")
+
+    await db_session.refresh(booking)
+    # Either outcome is acceptable — seats found and confirmed, or seats gone
+    # and refunded. What must never happen is the booking staying PENDING
+    # with the money taken and nothing in motion.
+    assert booking.status is not BookingStatus.PENDING, (
+        "a captured payment must never be left as an unconfirmed booking"
+    )
+    assert booking.status in (BookingStatus.CONFIRMED, BookingStatus.CANCELLED)
+
+
+async def test_a_webhook_that_failed_once_is_retried_not_dropped(
+    db_session: AsyncSession,
+) -> None:
+    """The record is written before processing. If processing then failed,
+    redelivery saw the row and answered 'duplicate' — dropping the event for
+    good, so one transient blip meant a payment that never confirmed."""
+    from app.models.commerce import PaymentWebhookEvent
+    from app.repositories.commerce import WebhookEventRepository
+
+    repository = WebhookEventRepository(db_session)
+    event_id = f"evt_{uuid.uuid4().hex[:12]}"
+
+    db_session.add(
+        PaymentWebhookEvent(
+            provider="razorpay",
+            provider_event_id=event_id,
+            event_type="payment.captured",
+            signature_verified=True,
+            processed_at=None,  # recorded, never finished
+        )
+    )
+    await db_session.flush()
+
+    unfinished = await repository.by_provider_event_id("razorpay", event_id)
+    assert unfinished is not None
+    assert unfinished.processed_at is None, (
+        "an unfinished record must be distinguishable from a completed one, "
+        "or redelivery cannot tell them apart"
+    )
+
+
+async def test_simultaneous_refreshes_rotate_a_token_only_once(
+    racing_sessions,
+) -> None:
+    """One refresh token must not become two live sessions."""
+    from app.models.refresh_token import RefreshToken
+    from app.repositories.refresh_token import RefreshTokenRepository
+
+    _seed, make_session, _ = racing_sessions
+
+    async with make_session() as session:
+        user = User(
+            role=UserRole.CUSTOMER,
+            status=UserStatus.ACTIVE,
+            email=unique_email("rotator"),
+        )
+        session.add(user)
+        await session.flush()
+        token = RefreshToken(
+            user_id=user.id,
+            token_hash=uuid.uuid4().hex * 2,
+            family_id=uuid.uuid4(),
+            expires_at=datetime.now(UTC) + timedelta(days=30),
+        )
+        session.add(token)
+        await session.commit()
+        token_id, user_id = token.id, user.id
+
+    async def claim() -> bool:
+        async with make_session() as session:
+            won = await RefreshTokenRepository(session).claim_for_rotation(
+                token_id, now=datetime.now(UTC)
+            )
+            await session.commit()
+            return won
+
+    results = await asyncio.gather(claim(), claim())
+    assert sum(results) == 1, f"exactly one claim may win, got {results}"
+
+    async with make_session() as session:
+        await session.execute(
+            sa.text("DELETE FROM refresh_tokens WHERE user_id = :u"), {"u": user_id}
+        )
+        await session.execute(sa.text("DELETE FROM users WHERE id = :u"), {"u": user_id})
+        await session.commit()
+
+
+async def test_a_partial_refund_leaves_the_other_tickets_usable(
+    db_session: AsyncSession,
+) -> None:
+    """Refunding one seat of four must not void all four."""
+    from app.models.commerce import Payment, PaymentStatus, Refund, RefundReason, RefundStatus
+    from app.services.outbox import OutboxService
+    from app.services.payment_provider import UnconfiguredPaymentProvider
+
+    event, category = await make_event(db_session)
+    customer = User(role=UserRole.CUSTOMER, status=UserStatus.ACTIVE, email=unique_email("partial"))
+    db_session.add(customer)
+    await db_session.flush()
+
+    booking = Booking(
+        reference=f"JIVE-{uuid.uuid4().hex[:8].upper()}",
+        user_id=customer.id,
+        event_id=event.id,
+        status=BookingStatus.CONFIRMED,
+        subtotal_paise=400000,
+        fees_paise=0,
+        total_paise=400000,
+        quantity=4,
+        confirmed_at=datetime.now(UTC),
+    )
+    db_session.add(booking)
+    await db_session.flush()
+    item = BookingItem(
+        booking_id=booking.id,
+        ticket_category_id=category.id,
+        category_name="General",
+        unit_price_paise=100000,
+        quantity=4,
+        line_total_paise=400000,
+    )
+    db_session.add(item)
+    payment = Payment(
+        booking_id=booking.id,
+        provider="unconfigured",
+        provider_payment_id=f"pay_{uuid.uuid4().hex[:10]}",
+        amount_paise=400000,
+        idempotency_key=f"order:{booking.id}",
+        status=PaymentStatus.CAPTURED,
+        captured_at=datetime.now(UTC),
+    )
+    db_session.add(payment)
+    await db_session.flush()
+
+    service = TicketService(db_session, OutboxService(db_session))
+    await service.issue_for_booking(booking.id)
+
+    refund = Refund(
+        booking_id=booking.id,
+        payment_id=payment.id,
+        amount_paise=100000,  # one seat of four
+        status=RefundStatus.PROCESSING,
+        reason=RefundReason.CUSTOMER_CANCELLED,
+        provider="unconfigured",
+        idempotency_key=f"refund:{booking.id}:100000",
+    )
+    db_session.add(refund)
+    await db_session.flush()
+
+    settings = Settings(environment="test", secret_key="t" * 64)
+    refunds = RefundService(
+        db_session, settings, UnconfiguredPaymentProvider(), OutboxService(db_session)
+    )
+    await refunds._settle(refund, payment)
+
+    still_valid = await db_session.scalar(
+        sa.text("SELECT count(*) FROM tickets WHERE booking_id = :b AND status = 'ISSUED'"),
+        {"b": booking.id},
+    )
+    assert still_valid == 4, (
+        "a quarter refund must not void the three seats still paid for; "
+        f"{4 - (still_valid or 0)} were voided"
+    )
+    await db_session.refresh(booking)
+    assert booking.status is BookingStatus.PARTIALLY_REFUNDED

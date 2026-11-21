@@ -188,6 +188,15 @@ class RazorpayProvider:
             failure_reason=data.get("error_description") or data.get("error_reason"),
         )
 
+    async def fetch_payments_for_order(self, provider_order_id: str) -> list[VerifiedPayment]:
+        """Every attempt against an order.
+
+        Reconciliation's fallback when no payment id was ever recorded — the
+        customer paid and closed the tab, so the order is all we hold.
+        """
+        data = await self._get(f"/orders/{provider_order_id}/payments")
+        return [self._to_verified_payment(item) for item in data.get("items", [])]
+
     def verify_checkout_signature(
         self, *, provider_order_id: str, provider_payment_id: str, signature: str
     ) -> bool:
