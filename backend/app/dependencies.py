@@ -41,6 +41,7 @@ from app.services.payment import PaymentService
 from app.services.payment_provider import PaymentProvider, get_payment_provider
 from app.services.refund import RefundService
 from app.services.reports import ReportService
+from app.services.settings import SettingsService
 from app.services.staff import StaffService
 from app.services.ticket import TicketService
 from app.services.user import UserService
@@ -133,6 +134,10 @@ def get_catalogue_service(session: DbSession, cache: CacheDep) -> CatalogueServi
     return CatalogueService(session, cache)
 
 
+def get_settings_service(session: DbSession, cache: CacheDep) -> SettingsService:
+    return SettingsService(session, cache)
+
+
 def get_outbox_service(session: DbSession) -> OutboxService:
     return OutboxService(session)
 
@@ -196,6 +201,7 @@ TicketServiceDep = Annotated[TicketService, Depends(get_ticket_service)]
 StaffServiceDep = Annotated[StaffService, Depends(get_staff_service)]
 ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]
 OutboxServiceDep = Annotated[OutboxService, Depends(get_outbox_service)]
+SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]
 
 
 # ------------------------------------------------------------------- identity ---

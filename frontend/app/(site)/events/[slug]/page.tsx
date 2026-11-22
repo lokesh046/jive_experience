@@ -12,6 +12,7 @@ import { TicketPicker } from "@/components/TicketPicker";
 import { getEvent, getEvents } from "@/lib/catalogue";
 import { SITE_NAME, SITE_URL } from "@/lib/config";
 import { inr, longDate, timeOf } from "@/lib/format";
+import { describePolicy } from "@/lib/policy";
 
 export async function generateStaticParams() {
   const events = await getEvents();
@@ -81,6 +82,7 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
 
   const photos = [...new Set([e.banner_image_url, ...e.gallery_image_urls].filter((u): u is string => !!u))];
   if (photos.length === 0) photos.push(site("hero"));
+  const refundLines = describePolicy(e.cancellation_policy);
   const paragraphs = (e.description ?? "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 
   return (
@@ -125,14 +127,22 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
 
         <EventLocation venue={e.venue} locationUrl={e.location_url} />
 
-        {e.terms_and_conditions && (
-          <div className="prose">
-            <h2>Good to know</h2>
-            <ul className="terms">
-              {e.terms_and_conditions.split(/\r?\n/).map((t) => t.trim()).filter(Boolean).map((t, i) => <li key={i}>{t}</li>)}
-            </ul>
-          </div>
-        )}
+        <div className="prose">
+          <h2>Good to know</h2>
+          <h3 className="step" style={{ margin: "0 0 14px" }}>Cancellations and refunds</h3>
+          {refundLines.length > 0
+            ? <ul className="terms">{refundLines.map((t, i) => <li key={i}>{t}</li>)}</ul>
+            : <p>This event has no online cancellation. If your plans change, contact us and we will help.</p>}
+          <p style={{ marginTop: 14 }}><Link className="link" href="/cancellation-policy">Read the full policy</Link></p>
+          {e.terms_and_conditions && (
+            <>
+              <h3 className="step" style={{ margin: "36px 0 14px" }}>Terms for this event</h3>
+              <ul className="terms">
+                {e.terms_and_conditions.split(/\r?\n/).map((t) => t.trim()).filter(Boolean).map((t, i) => <li key={i}>{t}</li>)}
+              </ul>
+            </>
+          )}
+        </div>
       </div>
     </main>
   );

@@ -13,6 +13,7 @@ from app.router.v1 import (
     admin_catalogue,
     admin_commerce,
     admin_reports,
+    admin_settings,
     auth,
     bookings,
     events,
@@ -39,6 +40,7 @@ api_router.include_router(scanner.router, prefix="/scanner")
 api_router.include_router(admin_catalogue.router, prefix="/admin")
 api_router.include_router(admin_commerce.router, prefix="/admin")
 api_router.include_router(admin_reports.router, prefix="/admin")
+api_router.include_router(admin_settings.router, prefix="/admin")
 
 # Still to come:
 #   Phase 6  services, artists, portfolio, enquiries, notifications, reports

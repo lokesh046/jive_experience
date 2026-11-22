@@ -141,7 +141,7 @@ async def refund_quote(
     """
     booking = await bookings.get_for_customer(reference, customer)
     event = await bookings.event_for(booking)
-    quote = refunds.quote(booking=booking, event=event)
+    quote = await refunds.quote(booking=booking, event=event)
     return RefundQuoteOut(
         eligible=quote.eligible,
         amount_paise=quote.amount_paise,

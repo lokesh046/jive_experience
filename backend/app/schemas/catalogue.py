@@ -22,6 +22,7 @@ from pydantic import (
 )
 
 from app.models.event import EventCategory, EventStatus
+from app.schemas.policy import CancellationPolicy
 
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -212,7 +213,7 @@ class EventCreate(BaseModel):
     ] = None
     max_tickets_per_customer: Annotated[int, Field(default=4, ge=1, le=100)] = 4
     requires_attendee_name: bool = False
-    cancellation_policy: dict[str, Any] | None = None
+    cancellation_policy: CancellationPolicy | None = None
     terms_and_conditions: str | None = None
     location_url: LocationUrl = None
     is_featured: bool = False
@@ -258,7 +259,7 @@ class EventUpdate(BaseModel):
     ] = None
     max_tickets_per_customer: Annotated[int | None, Field(default=None, ge=1, le=100)] = None
     requires_attendee_name: bool | None = None
-    cancellation_policy: dict[str, Any] | None = None
+    cancellation_policy: CancellationPolicy | None = None
     terms_and_conditions: str | None = None
     location_url: LocationUrl = None
     is_featured: bool | None = None

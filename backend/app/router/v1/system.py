@@ -7,8 +7,9 @@ from fastapi import APIRouter, Response, status
 from app import __version__
 from app.core.redis import redis_healthy
 from app.db.session import database_healthy
-from app.dependencies import AppSettings
+from app.dependencies import AppSettings, SettingsServiceDep
 from app.models.base import utc_now
+from app.schemas.policy import CancellationPolicy, DefaultPolicyOut
 from app.schemas.system import (
     DependencyStatus,
     HealthResponse,
@@ -52,3 +53,13 @@ async def service_info(settings: AppSettings) -> ServiceInfo:
         default_timezone=settings.default_timezone,
         currency=settings.default_currency,
     )
+
+
+@router.get(
+    "/policy/cancellation",
+    response_model=DefaultPolicyOut,
+    summary="The default cancellation and refund policy, for the public policy page",
+)
+async def default_cancellation_policy(service: SettingsServiceDep) -> DefaultPolicyOut:
+    stored = await service.default_policy()
+    return DefaultPolicyOut(policy=CancellationPolicy.model_validate(stored) if stored else None)

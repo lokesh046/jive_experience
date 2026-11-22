@@ -682,3 +682,18 @@ select option { background: #111; }
 .scan-ok { color: #6fd08c; } .scan-no { color: #e07a5f; }
 .pager { margin-top: 16px; font-size: 14px; color: var(--mute); display: flex; gap: 16px; align-items: center; }
 .pager button:disabled { opacity: 0.4; cursor: default; }
+
+/* refund policy editor */
+.lbl { font-size: 14px; color: var(--mute); margin-bottom: 8px; display: block; }
+.radio { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 16px; color: var(--fg); cursor: pointer; }
+.pol { margin-top: 16px; }
+.pol-presets { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.chip { border: 1px solid var(--field); background: none; color: var(--fg); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+.chip:hover:not(:disabled) { border-color: #fff; }
+.pol-rows { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.pol-rows li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--mute); font-size: 15px; }
+.pol-rows input { width: 72px; background: none; border: 0; border-bottom: 1px solid var(--field); color: var(--fg); font: inherit; padding: 6px 0; text-align: center; }
+.pol-rows select { background: none; border: 0; border-bottom: 1px solid var(--field); color: var(--fg); font: inherit; padding: 6px 0; }
+.pol-preview { margin-top: 20px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 16px; background: #0b0b0b; }
+.pol-preview b { display: block; font: 500 12px/1 var(--font-sans), sans-serif; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); margin-bottom: 10px; }
+.pol-preview p + p { margin-top: 6px; }

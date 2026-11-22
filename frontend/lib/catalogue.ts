@@ -1,5 +1,6 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { API_V1 } from "./config";
+import type { Policy } from "./policy";
 import type { EventDetail, EventListItem, Page } from "./types";
 
 /**
@@ -74,4 +75,20 @@ export async function getArtists(events: EventListItem[]): Promise<Artist[]> {
     }
   }
   return out.slice(0, 8);
+}
+
+/** The default cancellation and refund policy, or null when the company has not set one. */
+export async function getDefaultPolicy(): Promise<Policy | null> {
+  "use cache";
+  cacheTag("events");
+  try {
+    const res = await fetch(`${API_V1}/system/policy/cancellation`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) throw new Error(String(res.status));
+    const body = (await res.json()) as { policy: Policy | null };
+    cacheLife("minutes");
+    return body.policy;
+  } catch {
+    cacheLife("seconds");
+    return null;
+  }
 }

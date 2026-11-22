@@ -78,7 +78,7 @@ export interface EventDetail {
   lineup: Performer[];
   max_tickets_per_customer: number;
   requires_attendee_name: boolean;
-  cancellation_policy: Record<string, unknown> | null;
+  cancellation_policy: { tiers: { hours_before: number; percent: number }[] } | null;
   terms_and_conditions: string | null;
   location_url: string | null;
   is_sold_out: boolean;
@@ -261,6 +261,7 @@ export interface EventAdmin {
   max_tickets_per_customer: number;
   requires_attendee_name: boolean;
   terms_and_conditions: string | null;
+  cancellation_policy: { tiers: { hours_before: number; percent: number }[] } | null;
   location_url: string | null;
   is_featured: boolean;
   published_at: string | null;

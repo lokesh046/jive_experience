@@ -144,6 +144,13 @@ class EventRepository(BaseRepository[Event]):
         result = await self.session.execute(select(Event.slug).where(Event.venue_id == venue_id))
         return result.scalars().all()
 
+    async def public_slugs(self) -> Sequence[str]:
+        """Slugs of every event a customer can see, for cache invalidation."""
+        result = await self.session.execute(
+            select(Event.slug).where(Event.status.in_(PUBLIC_EVENT_STATUSES))
+        )
+        return result.scalars().all()
+
     async def slug_taken(self, slug: str, *, excluding: uuid.UUID | None = None) -> bool:
         conditions = [Event.slug == slug]
         if excluding is not None:

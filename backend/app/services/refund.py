@@ -38,10 +38,12 @@ from app.models.commerce import (
 )
 from app.models.event import Event
 from app.models.fulfilment import TicketStatus
+from app.models.site_setting import DEFAULT_CANCELLATION_POLICY
 from app.models.user import User
 from app.repositories.catalogue import EventRepository
 from app.repositories.commerce import BookingRepository, PaymentRepository, RefundRepository
 from app.repositories.fulfilment import TicketRepository
+from app.repositories.site_setting import SiteSettingRepository
 from app.services.audit import AuditService
 from app.services.outbox import (
     TOPIC_BOOKING_CANCELLED,
@@ -81,11 +83,20 @@ class RefundService:
         self.bookings = BookingRepository(session)
         self.tickets = TicketRepository(session)
         self.events = EventRepository(session)
+        self.site_settings = SiteSettingRepository(session)
         self.audit = AuditService(session)
 
     # ------------------------------------------------------------ policy ---
 
-    def quote(self, *, booking: Booking, event: Event, now: datetime | None = None) -> RefundQuote:
+    async def effective_policy(self, event: Event) -> dict[str, Any] | None:
+        """The event's own policy, or the site default when it has none."""
+        if event.cancellation_policy:
+            return event.cancellation_policy
+        return await self.site_settings.get(DEFAULT_CANCELLATION_POLICY)
+
+    async def quote(
+        self, *, booking: Booking, event: Event, now: datetime | None = None
+    ) -> RefundQuote:
         """How much this booking would get back if cancelled now.
 
         With no policy configured the answer is "not self-serviceable" rather
@@ -99,7 +110,7 @@ class RefundService:
         if event.starts_at <= now:
             return RefundQuote(False, 0, 0, "The event has already started.")
 
-        policy = event.cancellation_policy or {}
+        policy = await self.effective_policy(event) or {}
         tiers = policy.get("tiers") if isinstance(policy, dict) else None
         if not tiers:
             return RefundQuote(
@@ -241,7 +252,7 @@ class RefundService:
             raise BusinessRuleError("This booking is already cancelled.", code="ALREADY_CANCELLED")
 
         if customer_initiated:
-            quote = self.quote(booking=booking, event=event)
+            quote = await self.quote(booking=booking, event=event)
             if not quote.eligible:
                 raise BusinessRuleError(quote.reason, code="REFUND_NOT_ELIGIBLE")
             amount: int | None = quote.amount_paise

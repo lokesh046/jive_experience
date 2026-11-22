@@ -29,6 +29,7 @@ from app.models.event import (
     TicketCategory,
 )
 from app.models.fulfilment import TicketStatus
+from app.models.site_setting import DEFAULT_CANCELLATION_POLICY
 from app.models.user import User
 from app.models.venue import Venue
 from app.repositories.catalogue import (
@@ -38,6 +39,7 @@ from app.repositories.catalogue import (
 )
 from app.repositories.commerce import InventoryRepository
 from app.repositories.fulfilment import TicketRepository
+from app.repositories.site_setting import SiteSettingRepository
 from app.schemas.catalogue import (
     AvailabilityItem,
     EventAvailability,
@@ -231,7 +233,12 @@ class CatalogueService:
             # cannot be discovered by probing slugs.
             raise NotFoundError("Event not found.", code="EVENT_NOT_FOUND")
 
-        detail = self.to_detail(event)
+        default_policy = (
+            None
+            if event.cancellation_policy
+            else await SiteSettingRepository(self.session).get(DEFAULT_CANCELLATION_POLICY)
+        )
+        detail = self.to_detail(event, default_policy=default_policy)
         await self.cache.set_json(key, detail, ttl=EVENT_DETAIL_TTL)
         return detail
 
@@ -739,7 +746,9 @@ class CatalogueService:
         }
 
     @classmethod
-    def to_detail(cls, event: Event) -> dict[str, Any]:
+    def to_detail(
+        cls, event: Event, *, default_policy: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         now = datetime.now(UTC)
         # Once an event has started it is "past": the same cut-off the public list uses, and
         # the point at which the booking service stops selling.
@@ -811,7 +820,7 @@ class CatalogueService:
             ],
             "max_tickets_per_customer": event.max_tickets_per_customer,
             "requires_attendee_name": event.requires_attendee_name,
-            "cancellation_policy": event.cancellation_policy,
+            "cancellation_policy": event.cancellation_policy or default_policy,
             "terms_and_conditions": event.terms_and_conditions,
             "location_url": event.location_url,
             "is_sold_out": cls._is_sold_out(event),
