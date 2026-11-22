@@ -9,8 +9,10 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Request, status
 
+from app.core.errors import BusinessRuleError
+from app.core.images import MAX_UPLOAD_BYTES
 from app.core.pagination import Page
 from app.dependencies import CurrentUser, Pagination, RequireAdmin, UserServiceDep
 from app.models.user import UserRole, UserStatus
@@ -41,6 +43,44 @@ async def update_my_profile(
 ) -> UserProfile:
     updated = await service.update_profile(user, payload)
     return UserProfile.model_validate(updated)
+
+
+@router.put(
+    "/me/avatar",
+    response_model=UserProfile,
+    summary="Set your profile photo",
+)
+async def upload_my_avatar(
+    request: Request, user: CurrentUser, service: UserServiceDep
+) -> UserProfile:
+    """The request body is the image itself (JPEG, PNG or WebP, up to 2 MB).
+
+    It is decoded, cropped to a square and re-encoded; the original is never
+    stored. The size limit is enforced while reading, not after, so an oversized
+    upload cannot fill memory first.
+    """
+    too_big = BusinessRuleError(
+        "That image is larger than 2 MB.", code="IMAGE_TOO_LARGE", status_code=413
+    )
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES:
+        raise too_big
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > MAX_UPLOAD_BYTES:
+            raise too_big
+    updated = await service.set_avatar(user, bytes(body))
+    return UserProfile.model_validate(updated)
+
+
+@router.delete(
+    "/me/avatar",
+    response_model=UserProfile,
+    summary="Remove your profile photo",
+)
+async def delete_my_avatar(user: CurrentUser, service: UserServiceDep) -> UserProfile:
+    return UserProfile.model_validate(await service.remove_avatar(user))
 
 
 # ---------------------------------------------------------- administration ---

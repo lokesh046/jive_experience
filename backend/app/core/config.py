@@ -106,6 +106,12 @@ class Settings(BaseSettings):
     payment_key_secret: SecretStr | None = None
     payment_webhook_secret: SecretStr | None = None
 
+    # Cloudinary hosts event photos. The browser uploads straight to it with a
+    # short-lived signature from this API, so the secret never leaves the server.
+    cloudinary_cloud_name: str | None = None
+    cloudinary_api_key: str | None = None
+    cloudinary_api_secret: SecretStr | None = None
+
     # --------------------------------------------------------- worker ----
     worker_poll_interval_seconds: float = 2.0
     worker_batch_size: int = 20

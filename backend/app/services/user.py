@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -9,8 +10,10 @@ from datetime import UTC, datetime
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import cloudinary
 from app.core.config import Settings
 from app.core.errors import BusinessRuleError, ConflictError
+from app.core.images import InvalidImageError, make_avatar
 from app.core.pagination import PageParams
 from app.models.refresh_token import TokenRevocationReason
 from app.models.user import User, UserRole, UserStatus
@@ -43,6 +46,34 @@ class UserService:
         if payload.full_name is not None:
             user.full_name = payload.full_name
 
+        await self.session.commit()
+        return user
+
+    # ------------------------------------------------------------- avatar ---
+
+    async def set_avatar(self, user: User, data: bytes) -> User:
+        """Replace the caller's profile photo with a processed copy of `data`.
+
+        The upload is decoded, cropped and re-encoded here first, so Cloudinary
+        only ever receives a clean 256px WebP, never the original file.
+        """
+        try:
+            # Decoding and resizing are CPU work: keep them off the event loop.
+            processed = await asyncio.to_thread(make_avatar, data)
+        except InvalidImageError as exc:
+            raise BusinessRuleError(str(exc), code="INVALID_IMAGE") from exc
+
+        user.avatar_url = await cloudinary.upload_avatar(
+            self.settings, user_id=str(user.id), data=processed
+        )
+        await self.session.commit()
+        return user
+
+    async def remove_avatar(self, user: User) -> User:
+        # Only photos we host live in Cloudinary; a Google picture is just a link.
+        if user.avatar_url and "res.cloudinary.com" in user.avatar_url:
+            await cloudinary.delete_avatar(self.settings, user_id=str(user.id))
+        user.avatar_url = None
         await self.session.commit()
         return user
 

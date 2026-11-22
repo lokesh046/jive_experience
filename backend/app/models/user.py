@@ -29,7 +29,13 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, Index, String
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Enum,
+    Index,
+    String,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin

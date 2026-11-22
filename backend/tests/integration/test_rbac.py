@@ -248,3 +248,19 @@ async def test_unknown_user_id_returns_not_found(
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "NOT_FOUND"
+
+
+async def test_upload_signing_is_admin_only(
+    api: AsyncClient, db_session: AsyncSession, google: StubGoogleClient
+) -> None:
+    assert (await api.post("/api/v1/admin/uploads/sign")).status_code == 401
+    customer = await customer_token(api)
+    denied = await api.post(
+        "/api/v1/admin/uploads/sign", headers={"Authorization": f"Bearer {customer}"}
+    )
+    assert denied.status_code == 403
+    admin = await sign_in_as(api, google, await seed_admin(db_session))
+    ok = await api.post("/api/v1/admin/uploads/sign", headers={"Authorization": f"Bearer {admin}"})
+    assert ok.status_code in (200, 503)  # 503 only if Cloudinary is not configured
+    if ok.status_code == 200:
+        assert "signature" in ok.json() and "api_secret" not in ok.text

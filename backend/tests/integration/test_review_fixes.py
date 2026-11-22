@@ -33,6 +33,7 @@ from app.services.inventory import InventoryService
 from app.services.outbox import OutboxService
 from app.services.payment import PaymentService
 from app.services.refund import RefundService
+from app.services.staff import StaffService
 from app.services.ticket import TicketService, hash_qr_token
 from tests.integration.conftest import (
     customer_session,
@@ -1012,3 +1013,42 @@ async def test_a_partial_refund_leaves_the_other_tickets_usable(
     )
     await db_session.refresh(booking)
     assert booking.status is BookingStatus.PARTIALLY_REFUNDED
+
+
+# ---- 13. assigning staff must return the assignment, not a 500 ---------
+
+
+async def test_assigning_staff_returns_the_assignment(racing_sessions) -> None:
+    """The response reads the staff member's name and email. On a brand-new
+    assignment that relationship was not loaded and could not lazy-load, so the
+    very first assignment returned a 500 (found by the admin UI).
+
+    It needs a session of its own: in the shared test session the staff row is
+    already in memory, which hides the bug.
+    """
+    seed, maker, _ = racing_sessions
+    event_id, *_ = await seed(capacity=5, limit=2)
+
+    async with maker() as setup:
+        admin = await seed_admin(setup)
+        staff = await seed_staff(setup)
+        await setup.commit()
+    try:
+        async with maker() as fresh:
+            assignment = await StaffService(fresh).assign(
+                user_id=staff.id, event_id=event_id, actor=admin
+            )
+            assert assignment.user.email == staff.email
+            assert assignment.created_at is not None
+    finally:
+        async with maker() as cleanup:
+            await cleanup.execute(
+                sa.text("DELETE FROM staff_event_assignments WHERE event_id = :e"), {"e": event_id}
+            )
+            await cleanup.execute(
+                sa.text("DELETE FROM audit_logs WHERE actor_user_id = :a"), {"a": admin.id}
+            )
+            await cleanup.execute(
+                sa.text("DELETE FROM users WHERE id IN (:a, :s)"), {"a": admin.id, "s": staff.id}
+            )
+            await cleanup.commit()

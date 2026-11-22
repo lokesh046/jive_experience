@@ -11,6 +11,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
+from app.core.cloudinary import sign_upload
+from app.core.config import get_settings
+from app.core.errors import ServiceUnavailableError
 from app.core.pagination import Page
 from app.dependencies import (
     CatalogueServiceDep,
@@ -222,3 +225,27 @@ async def delete_ticket_category(
     """A category with sales is deactivated instead — deleting it would break
     the record of what customers bought."""
     await service.delete_category(category_id, actor=actor)
+
+
+# ------------------------------------------------------------------ uploads ---
+
+
+@router.post(
+    "/uploads/sign",
+    summary="Get a signed Cloudinary upload for an event photo",
+)
+async def sign_event_photo_upload(actor: RequireAdmin) -> dict[str, str | int]:
+    settings = get_settings()
+    if not (
+        settings.cloudinary_cloud_name
+        and settings.cloudinary_api_key
+        and settings.cloudinary_api_secret
+    ):
+        raise ServiceUnavailableError(
+            "Photo uploads are not set up.", code="UPLOADS_NOT_CONFIGURED"
+        )
+    return sign_upload(
+        cloud_name=settings.cloudinary_cloud_name,
+        api_key=settings.cloudinary_api_key,
+        api_secret=settings.cloudinary_api_secret,
+    )

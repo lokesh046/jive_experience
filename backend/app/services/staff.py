@@ -63,8 +63,10 @@ class StaffService:
             existing.assigned_by_id = actor.id
             assignment = existing
         else:
+            # `user=member` as well as the id: the response reads assignment.user, and a
+            # brand-new row has no loaded relationship (lazy loading is not possible here).
             assignment = StaffEventAssignment(
-                user_id=user_id, event_id=event_id, assigned_by_id=actor.id
+                user_id=user_id, event_id=event_id, assigned_by_id=actor.id, user=member
             )
             self.assignments.add(assignment)
 
