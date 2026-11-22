@@ -8,6 +8,7 @@ from datetime import date, datetime
 from pydantic import BaseModel
 
 from app.models.event import EventStatus
+from app.models.fulfilment import CheckinResult, TicketStatus
 
 
 class SalesTotals(BaseModel):
@@ -53,3 +54,23 @@ class SalesReport(BaseModel):
     days: int
     timezone: str
     generated_at: datetime
+
+
+class AttendeeOut(BaseModel):
+    serial: str
+    ticket_type: str
+    status: TicketStatus
+    attendee_name: str | None = None
+    customer_name: str | None = None
+    customer_email: str
+    booking_reference: str
+    checked_in_at: datetime | None = None
+
+
+class ScanOut(BaseModel):
+    scanned_at: datetime
+    result: CheckinResult
+    serial: str | None = None
+    ticket_type: str | None = None
+    staff: str | None = None
+    device_label: str | None = None

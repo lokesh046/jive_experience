@@ -3,12 +3,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ApiError, api } from "@/lib/api-client";
-import { CATEGORIES, fromIst, label, rupees, toIst, toPaise } from "@/lib/admin";
+import { CATEGORIES, fromIst, label, rupees, toIst, toPaise, when } from "@/lib/admin";
 import { LineupEditor } from "@/components/admin/LineupEditor";
 import { GalleryField } from "@/components/admin/GalleryField";
 import { PhotoField } from "@/components/admin/PhotoField";
 import { useData } from "@/lib/use-data";
-import type { Attendance, CategoryAdmin, EventAdmin, Page, StaffAssignment, UserAdmin, VenueFull } from "@/lib/types";
+import type { AttendeeRow, Attendance, CategoryAdmin, EventAdmin, Page, ScanRow, StaffAssignment, UserAdmin, VenueFull } from "@/lib/types";
 
 const blank = {
   title: "", slug: "", subtitle: "", description: "", category: "CONCERT", venue_id: "",
@@ -261,18 +261,118 @@ function Staff({ eventId }: { eventId: string }) {
   );
 }
 
+const STATUS_LABEL: Record<string, string> = { ISSUED: "Not yet in", CHECKED_IN: "Checked in", CANCELLED: "Cancelled", REFUNDED: "Refunded" };
+const RESULT_LABEL: Record<string, string> = {
+  SUCCESS: "Let in", ALREADY_USED: "Already used", WRONG_EVENT: "Wrong event", CANCELLED: "Cancelled ticket", REFUNDED: "Refunded ticket", INVALID: "Not a ticket",
+};
+
 function AttendanceBlock({ eventId }: { eventId: string }) {
   const { data } = useData<Attendance>(`admin/events/${eventId}/attendance`);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function download() {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/admin/events/${eventId}/attendees.csv`, { cache: "no-store" });
+      if (!res.ok) throw new Error();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await res.blob());
+      a.download = `attendees-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch { setErr("The attendee list could not be downloaded. Please try again."); }
+    finally { setBusy(false); }
+  }
+
   if (!data) return null;
   return (
     <section className="ad-sec" aria-labelledby="att-h">
-      <h2 id="att-h">Attendance</h2>
+      <div className="ad-head" style={{ marginBottom: 20 }}>
+        <h2 id="att-h" style={{ margin: 0 }}>Attendance</h2>
+        {data.total > 0 && <button className="pill sm ghost" type="button" onClick={download} disabled={busy}>{busy ? "Preparing…" : "Download attendee list (CSV)"}</button>}
+      </div>
+      {err && <p className="err" role="alert">{err}</p>}
       <div className="stat">
         <div><strong>{data.checked_in}</strong><span>Checked in</span></div>
         <div><strong>{data.issued}</strong><span>Not yet in</span></div>
         <div><strong>{data.cancelled + data.refunded}</strong><span>Cancelled or refunded</span></div>
         <div><strong>{data.total}</strong><span>Tickets in total</span></div>
       </div>
+      {data.total > 0 && <AttendeeList eventId={eventId} />}
+      <ScanLog eventId={eventId} />
     </section>
+  );
+}
+
+/** Opened on demand, so an event page that nobody scrolls to costs no request. */
+function AttendeeList({ eventId }: { eventId: string }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const path = open ? `admin/events/${eventId}/attendees?size=20&page=${page}${status ? `&status=${status}` : ""}${q ? `&search=${encodeURIComponent(q)}` : ""}` : null;
+  const list = useData<Page<AttendeeRow>>(path);
+  const pages = list.data ? Math.max(1, Math.ceil(list.data.total / list.data.size)) : 1;
+  const cols = "1.2fr 1.3fr 1.6fr 1fr";
+  return (
+    <details className="ad-fold" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>Who is coming</summary>
+      <form className="ad-bar" style={{ flexDirection: "row", marginTop: 16 }} onSubmit={(e) => { e.preventDefault(); setQ(typed.trim()); setPage(1); }}>
+        <div className="f"><label htmlFor="as">Search</label><input id="as" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Name, email, booking or ticket" maxLength={80} /></div>
+        <div className="f"><label htmlFor="ast">Status</label>
+          <select id="ast" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option value="">All</option>{Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+        <button className="pill sm" type="submit">Search</button>
+      </form>
+      {list.error && <p className="err" role="alert">{list.error}</p>}
+      {list.loading && <div className="skeleton" style={{ height: 80, marginTop: 16 }} />}
+      {list.data && (
+        <div className="tbl" role="table" aria-label="Attendees">
+          <div className="tr th" style={{ gridTemplateColumns: cols }}><span>Name</span><span>Ticket</span><span>Email</span><span>Status</span></div>
+          {list.data.items.length === 0 && <p className="empty">No one matches.</p>}
+          {list.data.items.map((a) => (
+            <div className="tr" key={a.serial} style={{ gridTemplateColumns: cols }}>
+              <span><span className="name">{a.attendee_name || a.customer_name || "—"}</span><br /><span className="small">{a.booking_reference}</span></span>
+              <span>{a.ticket_type}<br /><span className="small">{a.serial}</span></span>
+              <span style={{ overflowWrap: "anywhere" }}>{a.customer_email}</span>
+              <span>{STATUS_LABEL[a.status] ?? a.status}{a.checked_in_at ? <><br /><span className="small">{when(a.checked_in_at)}</span></> : null}</span>
+            </div>
+          ))}
+          {pages > 1 && <p className="pager"><button type="button" className="link" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button> Page {page} of {pages} <button type="button" className="link" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button></p>}
+        </div>
+      )}
+    </details>
+  );
+}
+
+function ScanLog({ eventId }: { eventId: string }) {
+  const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const list = useData<Page<ScanRow>>(open ? `admin/events/${eventId}/scans?size=20&page=${page}` : null);
+  const pages = list.data ? Math.max(1, Math.ceil(list.data.total / list.data.size)) : 1;
+  const cols = "1.3fr 1.1fr 1.4fr 1.2fr";
+  return (
+    <details className="ad-fold" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>Scan log</summary>
+      <p className="hint" style={{ marginTop: 12 }}>Every scan at the gate, newest first. Refused scans are listed too: a run of &quot;Wrong event&quot; usually means someone is at the wrong gate.</p>
+      {list.error && <p className="err" role="alert">{list.error}</p>}
+      {list.loading && <div className="skeleton" style={{ height: 80, marginTop: 16 }} />}
+      {list.data && (
+        <div className="tbl" role="table" aria-label="Scan log">
+          <div className="tr th" style={{ gridTemplateColumns: cols }}><span>When</span><span>Result</span><span>Ticket</span><span>Scanned by</span></div>
+          {list.data.items.length === 0 && <p className="empty">Nothing has been scanned yet.</p>}
+          {list.data.items.map((s, i) => (
+            <div className="tr" key={`${s.scanned_at}-${i}`} style={{ gridTemplateColumns: cols }}>
+              <span>{when(s.scanned_at)}</span>
+              <span className={s.result === "SUCCESS" ? "scan-ok" : "scan-no"}>{RESULT_LABEL[s.result] ?? s.result}</span>
+              <span>{s.serial ? <>{s.ticket_type}<br /><span className="small">{s.serial}</span></> : <span className="small">No matching ticket</span>}</span>
+              <span style={{ overflowWrap: "anywhere" }}>{s.staff ?? "—"}{s.device_label ? <><br /><span className="small">{s.device_label}</span></> : null}</span>
+            </div>
+          ))}
+          {pages > 1 && <p className="pager"><button type="button" className="link" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button> Page {page} of {pages} <button type="button" className="link" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button></p>}
+        </div>
+      )}
+    </details>
   );
 }

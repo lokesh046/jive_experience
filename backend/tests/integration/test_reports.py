@@ -110,3 +110,106 @@ async def test_only_admins_read_sales_and_the_range_is_limited(
     admin = await sign_in_as(api, google, await seed_admin(db_session))
     assert (await api.get(url, params={"days": 3}, headers=bearer(admin))).status_code == 422
     assert (await api.get(url, params={"days": 400}, headers=bearer(admin))).status_code == 422
+
+
+async def test_attendee_list_scan_log_and_csv_export(
+    api: AsyncClient, db_session: AsyncSession, google: StubGoogleClient
+) -> None:
+    from app.models.fulfilment import CheckinResult, TicketCheckin
+
+    customer, booking, event = await _confirmed_booking_with_tickets(db_session, quantity=2)
+    event_id, email, reference = event.id, customer.email, booking.reference
+    # A customer whose name would be run as a formula by a spreadsheet.
+    await db_session.execute(
+        sa.text("UPDATE users SET full_name = '=HYPERLINK(\"http://evil\")' WHERE email = :e"),
+        {"e": email},
+    )
+    tickets = (
+        await db_session.execute(
+            sa.select(Ticket.id, Ticket.serial)
+            .where(Ticket.booking_id == booking.id)
+            .order_by(Ticket.serial)
+        )
+    ).all()
+    now = datetime.now(UTC)
+    await db_session.execute(
+        sa.update(Ticket)
+        .where(Ticket.id == tickets[0][0])
+        .values(status=TicketStatus.CHECKED_IN, checked_in_at=now)
+    )
+    db_session.add_all(
+        [
+            TicketCheckin(
+                ticket_id=tickets[0][0],
+                event_id=event_id,
+                result=CheckinResult.SUCCESS,
+                scanned_at=now,
+            ),
+            TicketCheckin(
+                ticket_id=tickets[0][0],
+                event_id=event_id,
+                result=CheckinResult.ALREADY_USED,
+                scanned_at=now,
+            ),
+            TicketCheckin(
+                ticket_id=None, event_id=event_id, result=CheckinResult.INVALID, scanned_at=now
+            ),
+        ]
+    )
+    await db_session.commit()
+    db_session.expire_all()
+
+    admin = await sign_in_as(api, google, await seed_admin(db_session))
+    base = f"/api/v1/admin/events/{event_id}"
+
+    listed = (await api.get(f"{base}/attendees", headers=bearer(admin))).json()
+    assert listed["total"] == 2 and {a["booking_reference"] for a in listed["items"]} == {reference}
+    assert {a["status"] for a in listed["items"]} == {"ISSUED", "CHECKED_IN"}
+
+    only_in = (
+        await api.get(f"{base}/attendees", params={"status": "CHECKED_IN"}, headers=bearer(admin))
+    ).json()
+    assert only_in["total"] == 1 and only_in["items"][0]["checked_in_at"] is not None
+    by_mail = (
+        await api.get(f"{base}/attendees", params={"search": email[:8]}, headers=bearer(admin))
+    ).json()
+    assert by_mail["total"] == 2
+    none = (
+        await api.get(
+            f"{base}/attendees", params={"search": "no-such-person"}, headers=bearer(admin)
+        )
+    ).json()
+    assert none["total"] == 0
+
+    scans = (await api.get(f"{base}/scans", headers=bearer(admin))).json()
+    assert scans["total"] == 3
+    assert {s["result"] for s in scans["items"]} == {"SUCCESS", "ALREADY_USED", "INVALID"}
+    assert any(s["serial"] is None for s in scans["items"])  # a forged code has no ticket
+
+    csv_response = await api.get(f"{base}/attendees.csv", headers=bearer(admin))
+    assert csv_response.status_code == 200
+    assert csv_response.headers["content-type"].startswith("text/csv")
+    assert "attachment" in csv_response.headers["content-disposition"]
+    text = csv_response.content.decode("utf-8-sig")
+    assert text.splitlines()[0].startswith("Ticket,Type,Name on ticket")
+    assert email in text and reference in text
+    assert "'=HYPERLINK" in text and ",=HYPERLINK" not in text  # defused, not a live formula
+
+    audited = (
+        await db_session.execute(
+            sa.text("SELECT count(*) FROM audit_logs WHERE action = 'event.attendees_exported'")
+        )
+    ).scalar_one()
+    assert audited >= 1
+
+
+async def test_attendee_and_scan_endpoints_are_admin_only(
+    api: AsyncClient, db_session: AsyncSession, google: StubGoogleClient
+) -> None:
+    _, _, event = await _confirmed_booking_with_tickets(db_session, quantity=1)
+    base = f"/api/v1/admin/events/{event.id}"
+    customer = await customer_session(api, google)
+    for path in ("attendees", "attendees.csv", "scans"):
+        assert (await api.get(f"{base}/{path}")).status_code == 401
+        denied = await api.get(f"{base}/{path}", headers=bearer(customer["access"]))
+        assert denied.status_code == 403, path

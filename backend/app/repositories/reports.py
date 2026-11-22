@@ -9,15 +9,18 @@ Tickets and bookings that are still good are those CONFIRMED or PARTIALLY_REFUND
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Date, case, cast, func, select
+from sqlalchemy import Date, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.pagination import PageParams
 from app.models.commerce import Booking, BookingItem, BookingStatus
 from app.models.event import Event, EventStatus, TicketCategory
-from app.models.fulfilment import Ticket, TicketStatus
+from app.models.fulfilment import CheckinResult, Ticket, TicketCheckin, TicketStatus
+from app.models.user import User
 
 ACTIVE = (BookingStatus.CONFIRMED, BookingStatus.PARTIALLY_REFUNDED)
 GONE = (BookingStatus.CANCELLED, BookingStatus.REFUNDED)
@@ -133,3 +136,97 @@ class ReportRepository:
             }
             for r in (await self.session.execute(statement)).all()
         ]
+
+    # ------------------------------------------------------- attendees ---
+
+    def _attendee_query(
+        self, event_id: uuid.UUID, status: TicketStatus | None, search: str | None
+    ) -> Any:
+        statement = (
+            select(
+                Ticket.serial,
+                TicketCategory.name,
+                Ticket.status,
+                Ticket.attendee_name,
+                User.full_name,
+                User.email,
+                Booking.reference,
+                Ticket.checked_in_at,
+            )
+            .join(Booking, Booking.id == Ticket.booking_id)
+            .join(User, User.id == Ticket.user_id)
+            .join(TicketCategory, TicketCategory.id == Ticket.ticket_category_id)
+            .where(Ticket.event_id == event_id)
+        )
+        if status is not None:
+            statement = statement.where(Ticket.status == status)
+        if search:
+            term = search.strip()
+            statement = statement.where(
+                or_(
+                    Ticket.serial.icontains(term, autoescape=True),
+                    Booking.reference.icontains(term, autoescape=True),
+                    User.email.icontains(term, autoescape=True),
+                    User.full_name.icontains(term, autoescape=True),
+                    Ticket.attendee_name.icontains(term, autoescape=True),
+                )
+            )
+        return statement.order_by(TicketCategory.name, User.full_name, Ticket.serial)
+
+    async def attendees(
+        self,
+        event_id: uuid.UUID,
+        params: PageParams,
+        *,
+        status: TicketStatus | None,
+        search: str | None,
+    ) -> tuple[Sequence[tuple[Any, ...]], int]:
+        query = self._attendee_query(event_id, status, search)
+        total = (
+            await self.session.execute(select(func.count()).select_from(query.subquery()))
+        ).scalar_one()
+        rows = (await self.session.execute(query.offset(params.offset).limit(params.limit))).all()
+        return rows, int(total)
+
+    async def attendees_all(self, event_id: uuid.UUID, limit: int) -> Sequence[tuple[Any, ...]]:
+        query = self._attendee_query(event_id, None, None).limit(limit)
+        return [tuple(r) for r in (await self.session.execute(query)).all()]
+
+    async def scans(
+        self, event_id: uuid.UUID, params: PageParams
+    ) -> tuple[Sequence[tuple[Any, ...]], int]:
+        staff = User.__table__.alias("staff")
+        base = (
+            select(
+                TicketCheckin.scanned_at,
+                TicketCheckin.result,
+                Ticket.serial,
+                TicketCategory.name,
+                staff.c.full_name,
+                staff.c.email,
+                TicketCheckin.device_label,
+            )
+            .select_from(TicketCheckin)
+            .outerjoin(Ticket, Ticket.id == TicketCheckin.ticket_id)
+            .outerjoin(TicketCategory, TicketCategory.id == Ticket.ticket_category_id)
+            .outerjoin(staff, staff.c.id == TicketCheckin.staff_user_id)
+            .where(TicketCheckin.event_id == event_id)
+        )
+        total = (
+            await self.session.execute(
+                select(func.count()).select_from(
+                    select(TicketCheckin.id).where(TicketCheckin.event_id == event_id).subquery()
+                )
+            )
+        ).scalar_one()
+        rows: Sequence[tuple[Any, ...]] = (
+            await self.session.execute(
+                base.order_by(TicketCheckin.scanned_at.desc())
+                .offset(params.offset)
+                .limit(params.limit)
+            )
+        ).all()
+        return [tuple(r) for r in rows], int(total)
+
+
+__all__ = ["CheckinResult", "ReportRepository"]

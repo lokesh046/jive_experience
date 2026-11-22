@@ -315,3 +315,13 @@ export interface SalesReport {
   summary: SalesTotals; events: SalesEventRow[]; daily: SalesDay[]; categories: SalesCategoryRow[];
   days: number; timezone: string; generated_at: string;
 }
+
+export interface AttendeeRow {
+  serial: string; ticket_type: string; status: "ISSUED" | "CHECKED_IN" | "CANCELLED" | "REFUNDED";
+  attendee_name: string | null; customer_name: string | null; customer_email: string;
+  booking_reference: string; checked_in_at: string | null;
+}
+export interface ScanRow {
+  scanned_at: string; result: "SUCCESS" | "ALREADY_USED" | "WRONG_EVENT" | "CANCELLED" | "REFUNDED" | "INVALID";
+  serial: string | null; ticket_type: string | null; staff: string | null; device_label: string | null;
+}
