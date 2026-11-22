@@ -36,6 +36,7 @@ from app.services.cache import CatalogueCache
 from app.services.catalogue import CatalogueService
 from app.services.google_oauth import GoogleOAuthClient
 from app.services.inventory import InventoryService
+from app.services.leads import LeadService
 from app.services.outbox import OutboxService
 from app.services.payment import PaymentService
 from app.services.payment_provider import PaymentProvider, get_payment_provider
@@ -138,6 +139,12 @@ def get_settings_service(session: DbSession, cache: CacheDep) -> SettingsService
     return SettingsService(session, cache)
 
 
+def get_lead_service(
+    session: DbSession, outbox: Annotated[OutboxService, Depends(get_outbox_service)]
+) -> LeadService:
+    return LeadService(session, outbox)
+
+
 def get_outbox_service(session: DbSession) -> OutboxService:
     return OutboxService(session)
 
@@ -201,6 +208,7 @@ TicketServiceDep = Annotated[TicketService, Depends(get_ticket_service)]
 StaffServiceDep = Annotated[StaffService, Depends(get_staff_service)]
 ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]
 OutboxServiceDep = Annotated[OutboxService, Depends(get_outbox_service)]
+LeadServiceDep = Annotated[LeadService, Depends(get_lead_service)]
 SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]
 
 
@@ -311,6 +319,10 @@ OAuthRateLimit = Depends(
         scope="auth:oauth",
         fail_open=False,
     )
+)
+# Public forms: a few submissions an hour per address is plenty for a person and not for a bot.
+FormRateLimit = Depends(
+    RateLimiter(times=6, seconds=3600, scope="public:form", identifier=client_ip, fail_open=True)
 )
 RefreshRateLimit = Depends(
     RateLimiter(times=60, seconds=60, scope="auth:refresh", identifier=client_ip, fail_open=False)

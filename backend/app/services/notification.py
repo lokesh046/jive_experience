@@ -27,6 +27,7 @@ from app.models.user import User
 from app.repositories.catalogue import EventRepository
 from app.repositories.commerce import BookingRepository, RefundRepository
 from app.repositories.fulfilment import TicketRepository
+from app.repositories.lead import EnquiryRepository, SubscriberRepository
 from app.repositories.user import UserRepository
 from app.services.outbox import TOPIC_BOOKING_REMINDER
 from app.services.ticket import TicketService
@@ -64,6 +65,8 @@ class NotificationService:
         self.users = UserRepository(session)
         self.ticket_rows = TicketRepository(session)
         self.refunds = RefundRepository(session)
+        self.enquiries = EnquiryRepository(session)
+        self.subscribers = SubscriberRepository(session)
 
     async def send_tickets(self, booking_id: uuid.UUID) -> bool:
         """Email the tickets for a booking. Returns False when email is off."""
@@ -287,4 +290,91 @@ class NotificationService:
         )
         await mailer.send_mail(self.settings, mail)
         logger.info("refund_email_sent", refund_id=str(refund.id))
+        return True
+
+    # ------------------------------------------------------------- leads ---
+
+    async def send_enquiry(self, enquiry_id: uuid.UUID) -> bool:
+        """Tell the team about a new enquiry, and let the sender know it arrived."""
+        if not self.settings.email_configured:
+            logger.warning("email_not_configured_skipping_enquiry", enquiry_id=str(enquiry_id))
+            return False
+        enquiry = await self.enquiries.get(enquiry_id)
+        if enquiry is None:
+            raise NotFoundError("Enquiry not found.", code="ENQUIRY_NOT_FOUND")
+
+        cell = "padding:4px 16px 4px 0;color:#666"
+
+        def row(label: str, value: object) -> str:
+            return f"<tr><td style='{cell}'>{label}</td><td>{escape(str(value))}</td></tr>"
+
+        details = "".join(
+            [
+                row("Name", enquiry.name),
+                row("Email", enquiry.email),
+                row("Phone", enquiry.phone or "—"),
+                row("Date wanted", enquiry.event_date.isoformat() if enquiry.event_date else "—"),
+                row("Guests", enquiry.guests or "—"),
+            ]
+        )
+        body = escape(enquiry.message).replace("\n", "<br>")
+        inbox = f"{self.settings.public_site_url.rstrip('/')}/admin/inbox"
+        team = Mail(
+            to=self.settings.enquiry_notify_email or str(self.settings.mail_from),
+            subject=f"New private-booking enquiry from {enquiry.name}",
+            text=(
+                f"{enquiry.name} <{enquiry.email}> sent an enquiry.\n\n{enquiry.message}\n\n"
+                f"Open it in the admin inbox: {inbox}\n"
+            ),
+            html=(
+                f"<div style='font:16px/1.5 sans-serif;max-width:560px'><p>New enquiry.</p>"
+                f"<table>{details}</table><p style='margin-top:16px'>{body}</p>"
+                f"<p><a href='{escape(inbox)}'>Open the admin inbox</a></p></div>"
+            ),
+        )
+        await mailer.send_mail(self.settings, team)
+        thanks = Mail(
+            to=enquiry.email,
+            subject="We received your enquiry",
+            text=(
+                f"Hi {enquiry.name.split(' ')[0]}, thank you for getting in touch. "
+                "We have your enquiry and will reply by email soon.\n"
+            ),
+            html=(
+                f"<div style='font:16px/1.5 sans-serif;max-width:520px'>"
+                f"<p>Hi {escape(enquiry.name.split(' ')[0])}, thank you for getting in touch.</p>"
+                "<p>We have your enquiry and will reply by email soon.</p></div>"
+            ),
+        )
+        await mailer.send_mail(self.settings, thanks)
+        logger.info("enquiry_emails_sent", enquiry_id=str(enquiry.id))
+        return True
+
+    async def send_newsletter_welcome(self, subscriber_id: uuid.UUID) -> bool:
+        if not self.settings.email_configured:
+            logger.warning(
+                "email_not_configured_skipping_welcome", subscriber_id=str(subscriber_id)
+            )
+            return False
+        subscriber = await self.subscribers.get(subscriber_id)
+        if subscriber is None or not subscriber.subscribed:
+            return False
+        base = self.settings.public_site_url.rstrip("/")
+        link = f"{base}/unsubscribe?token={subscriber.unsubscribe_token}"
+        mail = Mail(
+            to=subscriber.email,
+            subject="You are on the JIVE list",
+            text=(
+                "You are subscribed to announcements about new JIVE nights. "
+                f"If this was not you, or you change your mind, unsubscribe here: {link}\n"
+            ),
+            html=(
+                "<div style='font:16px/1.5 sans-serif;max-width:520px'>"
+                "<p>You are subscribed to announcements about new JIVE nights.</p>"
+                f"<p style='color:#666'>If this was not you, or you change your mind, "
+                f"<a href='{escape(link)}'>unsubscribe here</a>.</p></div>"
+            ),
+        )
+        await mailer.send_mail(self.settings, mail)
+        logger.info("newsletter_welcome_sent", subscriber_id=str(subscriber.id))
         return True

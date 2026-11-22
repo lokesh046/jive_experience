@@ -26,6 +26,7 @@ from app.models.fulfilment import (  # noqa: F401
     Ticket,
     TicketCheckin,
 )
+from app.models.lead import Enquiry, NewsletterSubscriber  # noqa: F401
 from app.models.refresh_token import RefreshToken  # noqa: F401
 from app.models.site_setting import SiteSetting  # noqa: F401
 from app.models.user import User  # noqa: F401

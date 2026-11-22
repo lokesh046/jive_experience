@@ -329,3 +329,11 @@ export interface ScanRow {
   scanned_at: string; result: "SUCCESS" | "ALREADY_USED" | "WRONG_EVENT" | "CANCELLED" | "REFUNDED" | "INVALID";
   serial: string | null; ticket_type: string | null; staff: string | null; device_label: string | null;
 }
+
+export interface Enquiry {
+  id: string; name: string; email: string; phone: string | null; event_date: string | null; guests: number | null;
+  message: string; status: "NEW" | "CONTACTED" | "CLOSED"; admin_note: string | null; created_at: string;
+}
+export interface EnquiryPage extends Page<Enquiry> { counts: Record<string, number> }
+export interface Subscriber { email: string; subscribed: boolean; created_at: string; unsubscribed_at: string | null }
+export interface SubscriberPage extends Page<Subscriber> { active: number }

@@ -50,7 +50,9 @@ from app.services.outbox import (
     TOPIC_BOOKING_CANCELLED,
     TOPIC_BOOKING_CONFIRMED,
     TOPIC_BOOKING_REMINDER,
+    TOPIC_ENQUIRY_RECEIVED,
     TOPIC_EVENT_CANCELLED,
+    TOPIC_NEWSLETTER_SUBSCRIBED,
     TOPIC_PAYMENT_CAPTURED,
     TOPIC_REFUND_COMPLETED,
     TOPIC_REFUND_PROCESS,
@@ -160,6 +162,18 @@ async def handle_event_cancelled(session: AsyncSession, payload: dict[str, Any])
         await session.commit()
 
 
+async def handle_enquiry_received(session: AsyncSession, payload: dict[str, Any]) -> None:
+    sent = await _notifications(session).send_enquiry(uuid.UUID(payload["enquiry_id"]))
+    logger.info("enquiry_email_handled", enquiry_id=payload["enquiry_id"], sent=sent)
+
+
+async def handle_newsletter_subscribed(session: AsyncSession, payload: dict[str, Any]) -> None:
+    sent = await _notifications(session).send_newsletter_welcome(
+        uuid.UUID(payload["subscriber_id"])
+    )
+    logger.info("newsletter_welcome_handled", subscriber_id=payload["subscriber_id"], sent=sent)
+
+
 async def handle_booking_reminder(session: AsyncSession, payload: dict[str, Any]) -> None:
     sent = await _notifications(session).send_reminder(uuid.UUID(payload["booking_id"]))
     logger.info("reminder_email_handled", booking_id=payload["booking_id"], sent=sent)
@@ -188,6 +202,8 @@ HANDLERS: dict[str, Handler] = {
     TOPIC_EVENT_CANCELLED: handle_event_cancelled,
     TOPIC_BOOKING_CANCELLED: handle_booking_cancelled,
     TOPIC_BOOKING_REMINDER: handle_booking_reminder,
+    TOPIC_ENQUIRY_RECEIVED: handle_enquiry_received,
+    TOPIC_NEWSLETTER_SUBSCRIBED: handle_newsletter_subscribed,
     TOPIC_REFUND_COMPLETED: handle_refund_completed,
 }
 

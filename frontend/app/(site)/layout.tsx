@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 import { SiteHeader } from "@/components/SiteHeader";
 
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
@@ -9,6 +10,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <div id="main" style={{ flex: 1, display: "flex", flexDirection: "column" }}>{children}</div>
       <footer className="site">
         <div className="wrap">
+          <NewsletterSignup />
           <span>© JIVE</span>
           <nav aria-label="Footer">
             <Link href="/events">Events</Link>

@@ -12,11 +12,13 @@ from fastapi import APIRouter
 from app.router.v1 import (
     admin_catalogue,
     admin_commerce,
+    admin_leads,
     admin_reports,
     admin_settings,
     auth,
     bookings,
     events,
+    leads,
     scanner,
     system,
     users,
@@ -32,6 +34,7 @@ api_router.include_router(events.router, prefix="/events")
 api_router.include_router(bookings.router, prefix="/bookings")
 api_router.include_router(bookings.tickets_router, prefix="/tickets")
 api_router.include_router(bookings.webhook_router, prefix="/payments")
+api_router.include_router(leads.router)
 
 # Event staff scanner.
 api_router.include_router(scanner.router, prefix="/scanner")
@@ -40,6 +43,7 @@ api_router.include_router(scanner.router, prefix="/scanner")
 api_router.include_router(admin_catalogue.router, prefix="/admin")
 api_router.include_router(admin_commerce.router, prefix="/admin")
 api_router.include_router(admin_reports.router, prefix="/admin")
+api_router.include_router(admin_leads.router, prefix="/admin")
 api_router.include_router(admin_settings.router, prefix="/admin")
 
 # Still to come:

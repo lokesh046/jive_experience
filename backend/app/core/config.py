@@ -121,6 +121,8 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     mail_from: str | None = None
     mail_from_name: str = "JIVE Events"
+    # Where new private-booking enquiries are announced. Defaults to the sending address.
+    enquiry_notify_email: str | None = None
     # Where customers open their booking from an email.
     public_site_url: str = "http://localhost:3000"
 

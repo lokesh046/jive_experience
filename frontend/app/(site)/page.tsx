@@ -3,12 +3,13 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ArchiveMorph } from "@/components/ArchiveMorph";
+import { EnquiryForm } from "@/components/EnquiryForm";
 import { EventCard } from "@/components/EventCard";
 import { Photo } from "@/components/Photo";
 import { Ticker } from "@/components/Ticker";
 import { ARCHIVE, ARTISTS, PRIVATE_SERVICES } from "@/lib/content";
 import { getArtists, getEvents } from "@/lib/catalogue";
-import { CONTACT_EMAIL, SITE_NAME, SITE_URL } from "@/lib/config";
+import { SITE_NAME, SITE_URL } from "@/lib/config";
 import { longDate } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -94,11 +95,7 @@ async function HomeContent() {
               <div key={s.name}><b>{s.name}</b><span>{s.note}</span></div>
             ))}
           </div>
-          {CONTACT_EMAIL && (
-            <p style={{ marginTop: 32 }}>
-              <a className="link" href={`mailto:${CONTACT_EMAIL}?subject=Private%20booking%20enquiry`}>Make an enquiry</a>
-            </p>
-          )}
+          <EnquiryForm />
         </div>
       </section>
 
