@@ -46,6 +46,7 @@ from app.services.settings import SettingsService
 from app.services.staff import StaffService
 from app.services.ticket import TicketService
 from app.services.user import UserService
+from app.services.waitlist import WaitlistService
 
 logger = structlog.get_logger(__name__)
 
@@ -145,6 +146,12 @@ def get_lead_service(
     return LeadService(session, outbox)
 
 
+def get_waitlist_service(
+    session: DbSession, outbox: Annotated[OutboxService, Depends(get_outbox_service)]
+) -> WaitlistService:
+    return WaitlistService(session, outbox)
+
+
 def get_outbox_service(session: DbSession) -> OutboxService:
     return OutboxService(session)
 
@@ -209,6 +216,7 @@ StaffServiceDep = Annotated[StaffService, Depends(get_staff_service)]
 ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]
 OutboxServiceDep = Annotated[OutboxService, Depends(get_outbox_service)]
 LeadServiceDep = Annotated[LeadService, Depends(get_lead_service)]
+WaitlistServiceDep = Annotated[WaitlistService, Depends(get_waitlist_service)]
 SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]
 
 

@@ -5,6 +5,7 @@ import { ApiError, api, rememberNext } from "@/lib/api-client";
 import { inr } from "@/lib/format";
 import { isPremiumType } from "@/lib/premium";
 import { TicketPreview } from "@/components/TicketPreview";
+import { WaitlistForm } from "@/components/WaitlistForm";
 import type { Availability, Booking, TicketCategoryPublic } from "@/lib/types";
 
 interface Props {
@@ -154,6 +155,8 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
           );
         })}
       </div>
+
+      {cats.some(isOut) && <WaitlistForm slug={slug} soldOut={cats.filter(isOut).map((c) => ({ id: c.id, name: c.name }))} everythingGone={open.length === 0} />}
 
       <div className="cols">
         <div>

@@ -24,11 +24,13 @@ from app.models.commerce import Booking, BookingStatus
 from app.models.event import Event, EventStatus
 from app.models.fulfilment import TicketStatus
 from app.models.user import User
+from app.models.waitlist import WaitlistStatus
 from app.repositories.catalogue import EventRepository
 from app.repositories.commerce import BookingRepository, RefundRepository
 from app.repositories.fulfilment import TicketRepository
 from app.repositories.lead import EnquiryRepository, SubscriberRepository
 from app.repositories.user import UserRepository
+from app.repositories.waitlist import WaitlistRepository
 from app.services.outbox import TOPIC_BOOKING_REMINDER
 from app.services.ticket import TicketService
 
@@ -67,6 +69,7 @@ class NotificationService:
         self.refunds = RefundRepository(session)
         self.enquiries = EnquiryRepository(session)
         self.subscribers = SubscriberRepository(session)
+        self.waitlist = WaitlistRepository(session)
 
     async def send_tickets(self, booking_id: uuid.UUID) -> bool:
         """Email the tickets for a booking. Returns False when email is off."""
@@ -377,4 +380,46 @@ class NotificationService:
         )
         await mailer.send_mail(self.settings, mail)
         logger.info("newsletter_welcome_sent", subscriber_id=str(subscriber.id))
+        return True
+
+    async def send_waitlist_available(self, entry_id: uuid.UUID) -> bool:
+        """Tell someone on the waitlist that tickets are back on sale."""
+        if not self.settings.email_configured:
+            logger.warning("email_not_configured_skipping_waitlist", id=str(entry_id))
+            return False
+        entry = await self.waitlist.get(entry_id)
+        if entry is None or entry.status is not WaitlistStatus.NOTIFIED:
+            return False
+        event = await self.events.get(entry.event_id)
+        if event is None:
+            return False
+        await self.session.refresh(event, attribute_names=["venue"])
+        zone = ZoneInfo(event.timezone or self.settings.default_timezone)
+        when = event.starts_at.astimezone(zone).strftime("%a %d %b %Y, %I:%M %p").replace(" 0", " ")
+        base = self.settings.public_site_url.rstrip("/")
+        page = f"{base}/events/{event.slug}"
+        leave = f"{base}/waitlist/leave?token={entry.leave_token}"
+        title = escape(event.title)
+        mail = Mail(
+            to=entry.email,
+            subject=f"Tickets are available again: {event.title}",
+            text=(
+                f"Good news: tickets for {event.title} ({when}) are available again.\n"
+                f"They are first come, first served and we cannot hold them: {page}\n\n"
+                f"No longer interested? Leave the waitlist: {leave}\n"
+            ),
+            html=(
+                "<div style='font:16px/1.5 sans-serif;max-width:520px'>"
+                f"<p>Good news: tickets for <b>{title}</b> ({escape(when)}) "
+                "are available again.</p>"
+                "<p>They are first come, first served and we cannot hold them.</p>"
+                f"<p><a href='{escape(page)}' style='display:inline-block;padding:12px 22px;"
+                "background:#111;color:#fff;border-radius:999px;text-decoration:none'>"
+                "Get tickets</a></p>"
+                f"<p style='color:#666;font-size:13px'>No longer interested? "
+                f"<a href='{escape(leave)}'>Leave the waitlist</a>.</p></div>"
+            ),
+        )
+        await mailer.send_mail(self.settings, mail)
+        logger.info("waitlist_email_sent", entry_id=str(entry.id))
         return True

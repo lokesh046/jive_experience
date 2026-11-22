@@ -11,7 +11,7 @@ import { GalleryField } from "@/components/admin/GalleryField";
 import { PhotoField } from "@/components/admin/PhotoField";
 import { inr } from "@/lib/format";
 import { useData } from "@/lib/use-data";
-import type { AttendeeRow, Attendance, CategoryAdmin, EventAdmin, Page, ScanRow, StaffAssignment, UserAdmin, VenueFull } from "@/lib/types";
+import type { AttendeeRow, Attendance, CategoryAdmin, EventAdmin, Page, ScanRow, StaffAssignment, UserAdmin, VenueFull, WaitlistPage } from "@/lib/types";
 
 const blank = {
   title: "", slug: "", subtitle: "", description: "", category: "CONCERT", venue_id: "",
@@ -376,6 +376,7 @@ function AttendanceBlock({ eventId }: { eventId: string }) {
         <div><strong>{data.total}</strong><span>Tickets in total</span></div>
       </div>
       {data.total > 0 && <AttendeeList eventId={eventId} />}
+      <WaitlistList eventId={eventId} />
       <ScanLog eventId={eventId} />
     </section>
   );
@@ -413,6 +414,36 @@ function AttendeeList({ eventId }: { eventId: string }) {
               <span>{a.ticket_type}<br /><span className="small">{a.serial}</span></span>
               <span style={{ overflowWrap: "anywhere" }}>{a.customer_email}</span>
               <span>{STATUS_LABEL[a.status] ?? a.status}{a.checked_in_at ? <><br /><span className="small">{when(a.checked_in_at)}</span></> : null}</span>
+            </div>
+          ))}
+          {pages > 1 && <p className="pager"><button type="button" className="link" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button> Page {page} of {pages} <button type="button" className="link" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button></p>}
+        </div>
+      )}
+    </details>
+  );
+}
+
+function WaitlistList({ eventId }: { eventId: string }) {
+  const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const list = useData<WaitlistPage>(`admin/events/${eventId}/waitlist?size=20&page=${page}`);
+  const pages = list.data ? Math.max(1, Math.ceil(list.data.total / list.data.size)) : 1;
+  const cols = "2fr 1fr 1fr 1fr";
+  const summary = list.data ? ` (${list.data.waiting} waiting${list.data.notified ? `, ${list.data.notified} told` : ""})` : "";
+  return (
+    <details className="ad-fold" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>Waitlist{summary}</summary>
+      {open && <p className="hint" style={{ marginTop: 12 }}>People who asked to hear if tickets come back. The system emails them, oldest first, when tickets are free again.</p>}
+      {list.error && <p className="err" role="alert">{list.error}</p>}
+      {open && list.data && (
+        <div className="tbl" role="table" aria-label="Waitlist">
+          <div className="tr th" style={{ gridTemplateColumns: cols }}><span>Email</span><span>Ticket type</span><span className="num">Tickets</span><span>Status</span></div>
+          {list.data.items.length === 0 && <p className="empty">No one is waiting.</p>}
+          {list.data.items.map((w) => (
+            <div className="tr" key={w.email} style={{ gridTemplateColumns: cols }}>
+              <span style={{ overflowWrap: "anywhere" }}>{w.email}<br /><span className="small">{when(w.created_at)}</span></span>
+              <span>{w.ticket_type ?? "Any"}</span><span className="num">{w.quantity}</span>
+              <span>{w.status === "NOTIFIED" ? "Told" : "Waiting"}{w.notified_at ? <><br /><span className="small">{when(w.notified_at)}</span></> : null}</span>
             </div>
           ))}
           {pages > 1 && <p className="pager"><button type="button" className="link" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button> Page {page} of {pages} <button type="button" className="link" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button></p>}

@@ -38,6 +38,7 @@ TOPIC_REFUND_COMPLETED = "refund.completed"
 TOPIC_EVENT_CANCELLED = "event.cancelled"
 TOPIC_ENQUIRY_RECEIVED = "enquiry.received"
 TOPIC_NEWSLETTER_SUBSCRIBED = "newsletter.subscribed"
+TOPIC_WAITLIST_AVAILABLE = "waitlist.available"
 
 BASE_RETRY_SECONDS = 30
 MAX_RETRY_SECONDS = 3600

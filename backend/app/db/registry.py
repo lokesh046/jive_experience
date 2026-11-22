@@ -31,5 +31,6 @@ from app.models.refresh_token import RefreshToken  # noqa: F401
 from app.models.site_setting import SiteSetting  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.venue import Venue  # noqa: F401
+from app.models.waitlist import WaitlistEntry  # noqa: F401
 
 __all__ = ["Base"]

@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { AddToCalendar } from "@/components/AddToCalendar";
 import { EventLocation } from "@/components/EventLocation";
 import { Lineup } from "@/components/Lineup";
+import { WaitlistForm } from "@/components/WaitlistForm";
 import { VenueDetails } from "@/components/VenueDetails";
 import { EventGallery } from "@/components/EventGallery";
 import { TicketPicker } from "@/components/TicketPicker";
@@ -122,6 +123,7 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
           <p className="sub">
             {e.on_sale && prices.length > 0 ? `From ${inr(Math.min(...prices))}` : ""}
           </p>
+          {!e.on_sale && e.is_sold_out && !e.is_past && !cancelled && <WaitlistForm slug={e.slug} everythingGone soldOut={e.ticket_categories.map((c) => ({ id: c.id, name: c.name }))} />}
           <TicketPicker slug={e.slug} categories={e.ticket_categories} maxPerCustomer={e.max_tickets_per_customer} onSale={e.on_sale} saleMessage={saleMessage} preview={{ when: `${longDate(e.starts_at, e.timezone)} · ${timeOf(e.starts_at, e.timezone)}`, title: e.title, venue: `${e.venue.name}, ${e.venue.city}`, year: String(new Date(e.starts_at).getFullYear()) }} />
         </section>
 

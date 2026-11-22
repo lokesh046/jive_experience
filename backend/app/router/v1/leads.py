@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, status
 
-from app.dependencies import FormRateLimit, LeadServiceDep
+from app.dependencies import FormRateLimit, LeadServiceDep, WaitlistServiceDep
 from app.schemas.leads import EnquiryCreate, Received, SubscribeRequest, UnsubscribeRequest
+from app.schemas.waitlist import WaitlistJoin, WaitlistLeave
 
 router = APIRouter(tags=["public forms"])
 
@@ -42,4 +43,28 @@ async def subscribe(payload: SubscribeRequest, service: LeadServiceDep) -> Recei
 )
 async def unsubscribe(payload: UnsubscribeRequest, service: LeadServiceDep) -> Received:
     await service.unsubscribe(payload.token)
+    return Received()
+
+
+@router.post(
+    "/events/{slug}/waitlist",
+    response_model=Received,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[FormRateLimit],
+    summary="Join the waitlist for a sold-out event",
+)
+async def join_waitlist(slug: str, payload: WaitlistJoin, service: WaitlistServiceDep) -> Received:
+    """Only while the tickets are gone: if they are available, the answer says so."""
+    await service.join(slug, payload)
+    return Received()
+
+
+@router.post(
+    "/waitlist/leave",
+    response_model=Received,
+    dependencies=[FormRateLimit],
+    summary="Leave a waitlist, using the link in an email",
+)
+async def leave_waitlist(payload: WaitlistLeave, service: WaitlistServiceDep) -> Received:
+    await service.leave(payload.token)
     return Received()

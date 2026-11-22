@@ -719,3 +719,11 @@ footer.site .wrap { flex-wrap: wrap; }
 .enq-act select { width: auto; }
 .enq-msg { white-space: pre-wrap; color: var(--fg); font-size: 15px; line-height: 24px; }
 .st-new { color: #e8c15a; border-color: #6b5a24; } .st-closed { opacity: 0.6; }
+
+/* waitlist */
+.wait-box { margin: 0 0 56px; padding: 28px; border: 1px solid var(--field); border-radius: 22px; background: #0b0b0b; }
+.wait-box h3 { font-size: 26px; }
+.wait-box > summary { cursor: pointer; font-size: 16px; color: var(--fg); list-style: none; }
+.wait-box > summary::-webkit-details-marker { display: none; }
+.wait-grid { display: grid; grid-template-columns: 2fr 1.2fr 0.7fr; gap: 20px 28px; margin-bottom: 24px; }
+@media (max-width: 640px) { .wait-grid { grid-template-columns: 1fr; } }

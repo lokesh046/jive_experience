@@ -337,3 +337,6 @@ export interface Enquiry {
 export interface EnquiryPage extends Page<Enquiry> { counts: Record<string, number> }
 export interface Subscriber { email: string; subscribed: boolean; created_at: string; unsubscribed_at: string | null }
 export interface SubscriberPage extends Page<Subscriber> { active: number }
+
+export interface WaitlistRow { email: string; quantity: number; ticket_type: string | null; status: "WAITING" | "NOTIFIED" | "LEFT"; created_at: string; notified_at: string | null }
+export interface WaitlistPage extends Page<WaitlistRow> { waiting: number; notified: number }

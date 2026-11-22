@@ -57,6 +57,7 @@ from app.services.outbox import (
     TOPIC_REFUND_COMPLETED,
     TOPIC_REFUND_PROCESS,
     TOPIC_TICKETS_ISSUED,
+    TOPIC_WAITLIST_AVAILABLE,
     OutboxService,
     retry_delay,
 )
@@ -64,6 +65,7 @@ from app.services.payment import PaymentService
 from app.services.payment_provider import get_payment_provider
 from app.services.refund import RefundService
 from app.services.ticket import TicketService
+from app.services.waitlist import WaitlistService
 
 logger = structlog.get_logger("worker")
 
@@ -174,6 +176,11 @@ async def handle_newsletter_subscribed(session: AsyncSession, payload: dict[str,
     logger.info("newsletter_welcome_handled", subscriber_id=payload["subscriber_id"], sent=sent)
 
 
+async def handle_waitlist_available(session: AsyncSession, payload: dict[str, Any]) -> None:
+    sent = await _notifications(session).send_waitlist_available(uuid.UUID(payload["entry_id"]))
+    logger.info("waitlist_email_handled", entry_id=payload["entry_id"], sent=sent)
+
+
 async def handle_booking_reminder(session: AsyncSession, payload: dict[str, Any]) -> None:
     sent = await _notifications(session).send_reminder(uuid.UUID(payload["booking_id"]))
     logger.info("reminder_email_handled", booking_id=payload["booking_id"], sent=sent)
@@ -203,6 +210,7 @@ HANDLERS: dict[str, Handler] = {
     TOPIC_BOOKING_CANCELLED: handle_booking_cancelled,
     TOPIC_BOOKING_REMINDER: handle_booking_reminder,
     TOPIC_ENQUIRY_RECEIVED: handle_enquiry_received,
+    TOPIC_WAITLIST_AVAILABLE: handle_waitlist_available,
     TOPIC_NEWSLETTER_SUBSCRIBED: handle_newsletter_subscribed,
     TOPIC_REFUND_COMPLETED: handle_refund_completed,
 }
@@ -217,6 +225,7 @@ class Worker:
         self.worker_id = f"{socket.gethostname()}:{uuid.uuid4().hex[:8]}"
         self._stopping = asyncio.Event()
         self._last_reminder_sweep = 0.0
+        self._last_waitlist_sweep = 0.0
 
     def request_stop(self) -> None:
         """Finish the message in hand, then exit."""
@@ -351,7 +360,14 @@ class Worker:
             if queued:
                 logger.info("reminders_queued", count=queued)
 
-        # 5. Payments and refunds the provider never finished telling us
+        # 5. Waitlists: tickets that have come back since the last look.
+        if time.monotonic() - self._last_waitlist_sweep >= settings.waitlist_sweep_interval_seconds:
+            self._last_waitlist_sweep = time.monotonic()
+            told = await WaitlistService(session, outbox).notify_available()
+            if told:
+                logger.info("waitlist_notified", count=told)
+
+        # 6. Payments and refunds the provider never finished telling us
         #    about. Skipped while no provider is configured.
         if settings.payment_provider:
             provider = get_payment_provider(settings.payment_provider)

@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Response
 
-from app.dependencies import LeadServiceDep, Pagination, RequireAdmin
+from app.dependencies import LeadServiceDep, Pagination, RequireAdmin, WaitlistServiceDep
 from app.models.lead import EnquiryStatus
 from app.schemas.leads import (
     EnquiryOut,
@@ -16,6 +16,7 @@ from app.schemas.leads import (
     SubscriberOut,
     SubscriberPage,
 )
+from app.schemas.waitlist import WaitlistPage
 
 router = APIRouter(tags=["admin: inbox"])
 
@@ -76,4 +77,26 @@ async def subscribers_csv(actor: RequireAdmin, service: LeadServiceDep) -> Respo
             "Content-Disposition": 'attachment; filename="newsletter-subscribers.csv"',
             "Cache-Control": "no-store",
         },
+    )
+
+
+@router.get(
+    "/events/{event_id}/waitlist",
+    response_model=WaitlistPage,
+    summary="Who is waiting for tickets to an event",
+)
+async def event_waitlist(
+    event_id: uuid.UUID,
+    actor: RequireAdmin,
+    service: WaitlistServiceDep,
+    pagination: Pagination,
+) -> WaitlistPage:
+    rows, total, counts = await service.list_for_event(event_id, pagination)
+    return WaitlistPage(
+        items=rows,
+        total=total,
+        page=pagination.page,
+        size=pagination.size,
+        waiting=counts.get("WAITING", 0),
+        notified=counts.get("NOTIFIED", 0),
     )
