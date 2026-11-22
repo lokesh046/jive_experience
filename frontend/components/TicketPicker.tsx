@@ -12,7 +12,7 @@ interface Props {
   maxPerCustomer: number;
   onSale: boolean;
   saleMessage?: string;
-  preview: { when: string; title: string; venue: string };
+  preview: { when: string; title: string; venue: string; year: string };
 }
 
 const MESSAGES: Record<string, string> = {
@@ -128,7 +128,7 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
 
   return (
     <>
-      <TicketPreview when={preview.when} title={preview.title} venue={preview.venue} ticket={current?.name ?? null} premium={!!current && isPremium(current, cats)} admit={count} total={count ? inr(total) : null} />
+      <TicketPreview when={preview.when} title={preview.title} venue={preview.venue} ticket={current?.name ?? null} premium={!!current && isPremium(current, cats)} year={preview.year} admit={count} total={count ? inr(total) : null} />
 
       <h3 className="step">1. Choose a ticket type</h3>
       <div className="types" role="radiogroup" aria-label="Ticket type">

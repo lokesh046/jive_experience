@@ -392,17 +392,61 @@ select option { background: #111; }
 .how .qty button { width: 48px; height: 48px; }
 .how .qty output { min-width: 40px; font: 400 28px var(--font-serif), serif; }
 
-/* premium ticket: black with gold foil, for VIP-style types */
-.tkp-main, .tkp-stub { transition: background 0.6s var(--ease, ease), color 0.4s; }
-.tkp.prem { --ink: #f3e3b3; --soft: #b9a470; filter: drop-shadow(0 18px 44px rgba(214, 170, 70, 0.28)); }
-.tkp.prem .tkp-main, .tkp.prem .tkp-stub { background: linear-gradient(135deg, #17130b 0%, #0b0905 55%, #1d1608 100%); }
-.tkp.prem .tkp-main { box-shadow: inset 0 0 0 1px #8a6d2b; }
-.tkp.prem .tkp-stub { box-shadow: inset 0 0 0 1px #8a6d2b; border-left-color: #c9a24a; }
-.tkp.prem .tkp-title { background: linear-gradient(100deg, #f7e7b4, #d4a94b 45%, #f7e7b4 70%, #b98a2c); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.tkp.prem .tkp-fields { border-top-color: #6d5622; }
-.tkp.prem .tkp-bars { background: repeating-linear-gradient(90deg, #d4a94b 0 3px, transparent 3px 6px, #d4a94b 6px 7px, transparent 7px 11px); }
-.tkp.prem .tkp-kick::after { content: "  ★"; color: #d4a94b; }
-@media (prefers-reduced-motion: no-preference) {
-  .tkp.prem .tkp-title { background-size: 200% 100%; animation: foil 5s linear infinite; }
+/* premium ticket: warm grainy orange with cut corners, for VIP-style types */
+.tkp.prem { --ink: #5a3520; --soft: #6a4228; --stubw: 150px; filter: none; position: relative; isolation: isolate;
+  background:
+    radial-gradient(ellipse 60% 38% at 22% 108%, #f6cc9c 0 55%, transparent 72%),
+    radial-gradient(ellipse 45% 30% at 58% 118%, #f6cc9c 0 45%, transparent 70%),
+    radial-gradient(ellipse 70% 60% at 80% 10%, #ef8a4c 0 30%, transparent 75%),
+    #e5702f;
+  --r: 26px;
+  -webkit-mask:
+    radial-gradient(circle var(--r) at 0 0, #0000 97%, #000),
+    radial-gradient(circle var(--r) at 100% 0, #0000 97%, #000),
+    radial-gradient(circle var(--r) at 0 100%, #0000 97%, #000),
+    radial-gradient(circle var(--r) at 100% 100%, #0000 97%, #000);
+  -webkit-mask-composite: source-in;
+  mask:
+    radial-gradient(circle var(--r) at 0 0, #0000 97%, #000),
+    radial-gradient(circle var(--r) at 100% 0, #0000 97%, #000),
+    radial-gradient(circle var(--r) at 0 100%, #0000 97%, #000),
+    radial-gradient(circle var(--r) at 100% 100%, #0000 97%, #000);
+  mask-composite: intersect; }
+.tkp.prem::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; mix-blend-mode: soft-light; opacity: 0.9; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 0.93  0 0 0 0 0.82  0 0 0 1.6 -0.55'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.tkp.prem .tkp-main, .tkp.prem .tkp-stub { background: none; box-shadow: none; position: relative; z-index: 1; }
+.tkp.prem .tkp-main { padding: 30px 36px 28px; display: flex; flex-direction: column; border-radius: 0; }
+.tkp.prem .tkp-main::before, .tkp.prem .tkp-main::after { display: none; }
+.tkp.prem .tkp-stub { border-left: 2px dashed rgba(90, 53, 32, 0.45); border-radius: 0; padding: 0; justify-content: center; align-items: center; }
+.tkp.prem .tkp-stub::before, .tkp.prem .tkp-stub::after { content: ""; position: absolute; left: -2px; width: 44px; height: 44px; border-radius: 50%; background: var(--bg, #000); transform: translateX(-50%); }
+.tkp.prem .tkp-stub::before { top: -22px; } .tkp.prem .tkp-stub::after { bottom: -22px; }
+.tkp.prem .tkp-kick { order: 1; font: 500 15px/1.3 var(--font-sans), sans-serif; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink); }
+.tkp.prem .tkp-kick::after { content: none; }
+.tkp.prem .tkp-title { order: 0; font: 500 clamp(15px, 2vw, 21px)/1.3 var(--font-sans), sans-serif; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ink); background: none; animation: none; margin: 0; }
+.tkp.prem .tkp-big { order: 2; margin: auto 0 18px; font: 500 clamp(52px, 9vw, 108px)/0.92 var(--font-sans), sans-serif; letter-spacing: -0.02em; text-transform: uppercase; color: var(--ink); word-break: break-word; }
+.tkp.prem .tkp-venue { order: 3; font: 500 15px/1.3 var(--font-sans), sans-serif; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink); }
+.tkp.prem .tkp-fields { order: 4; border-top: 0; margin-top: 14px; padding-top: 0; gap: 28px; }
+.tkp.prem .tkp-fields div:first-child { display: none; }
+.tkp.prem .tkp-fields dt, .tkp.prem .tkp-fields dd { color: var(--ink); }
+.tkp.prem .tkp-fields dt { opacity: 0.7; }
+.tkp.prem .tkp-bars, .tkp.prem .tkp-code { display: none; }
+.tkp.prem .tkp-year { position: absolute; inset: 0; overflow: hidden; display: grid; place-items: center; writing-mode: vertical-rl; font: 700 clamp(72px, 8.5vw, 104px)/1 var(--font-sans), sans-serif; color: rgba(255, 236, 214, 0.4); letter-spacing: -0.04em; pointer-events: none; }
+.tkp.prem .tkp-admit { position: relative; z-index: 1; font: 500 clamp(26px, 3.2vw, 38px)/1 var(--font-sans), sans-serif; letter-spacing: 0; color: var(--ink); text-transform: uppercase; }
+.tkp-big, .tkp-year { display: none; }
+.tkp.prem .tkp-big, .tkp.prem .tkp-year { display: block; }
+.tkp.prem .tkp-year { display: grid; }
+.tkp.prem .tkp-main, .tkp.prem .tkp-stub { transition: none; }
+@media (max-width: 640px) {
+  .tkp.prem { --stub-h: 96px;
+    -webkit-mask:
+      radial-gradient(circle var(--r) at 0 0, #0000 97%, #000),
+      radial-gradient(circle var(--r) at 100% 0, #0000 97%, #000),
+      radial-gradient(circle var(--r) at 0 100%, #0000 97%, #000),
+      radial-gradient(circle var(--r) at 100% 100%, #0000 97%, #000);
+    -webkit-mask-composite: source-in; }
+  .tkp.prem .tkp-main { padding: 24px 24px 22px; }
+  .tkp.prem .tkp-stub { border-left: 0; border-top: 2px dashed rgba(90, 53, 32, 0.45); min-height: 96px; flex-direction: row; }
+  .tkp.prem .tkp-stub::before, .tkp.prem .tkp-stub::after { left: auto; top: -22px; bottom: auto; width: 44px; height: 44px; transform: translateY(0); }
+  .tkp.prem .tkp-stub::before { left: -22px; } .tkp.prem .tkp-stub::after { right: -22px; left: auto; }
+  .tkp.prem .tkp-year { writing-mode: horizontal-tb; font-size: 88px; }
+  .tkp.prem .tkp-admit { writing-mode: horizontal-tb; transform: none; font-size: 24px; }
 }
-@keyframes foil { from { background-position: 0% 0; } to { background-position: -200% 0; } }
