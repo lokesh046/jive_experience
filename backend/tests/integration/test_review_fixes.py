@@ -1140,3 +1140,62 @@ async def test_ticket_email_is_skipped_quietly_when_email_is_not_set_up(
     assert (
         await NotificationService(db_session, settings, tickets).send_tickets(booking.id) is False
     )
+
+
+async def test_cancellation_and_refund_emails_reach_the_customer(
+    db_session: AsyncSession, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.mailer import Mail
+    from app.models.commerce import Payment, PaymentStatus, Refund, RefundReason, RefundStatus
+    from app.services.notification import NotificationService
+
+    customer, booking, event = await _confirmed_booking_with_tickets(db_session, quantity=1)
+    to, reference, title = customer.email, booking.reference, event.title
+    payment = Payment(
+        booking_id=booking.id,
+        provider="razorpay",
+        provider_order_id=f"order_{uuid.uuid4().hex[:10]}",
+        idempotency_key=uuid.uuid4().hex,
+        status=PaymentStatus.CAPTURED,
+        amount_paise=100000,
+        currency="INR",
+    )
+    db_session.add(payment)
+    await db_session.flush()
+    refund = Refund(
+        booking_id=booking.id,
+        payment_id=payment.id,
+        amount_paise=100000,
+        status=RefundStatus.SUCCEEDED,
+        reason=RefundReason.CUSTOMER_CANCELLED,
+        provider="razorpay",
+        idempotency_key=uuid.uuid4().hex,
+    )
+    db_session.add(refund)
+    await db_session.flush()
+
+    sent: list[Mail] = []
+
+    async def fake_send(_settings: Settings, mail: Mail) -> None:
+        sent.append(mail)
+
+    monkeypatch.setattr("app.core.mailer.send_mail", fake_send)
+    on = settings.model_copy(
+        update={
+            "smtp_host": "smtp.example.com",
+            "smtp_username": "u",
+            "smtp_password": SecretStr("p"),
+            "mail_from": "tickets@example.com",
+        }
+    )
+    service = NotificationService(
+        db_session, on, TicketService(db_session, OutboxService(db_session), on)
+    )
+    assert await service.send_cancellation(booking.id) is True
+    assert await service.send_refund(refund.id) is True
+
+    cancelled, refunded = sent
+    assert cancelled.to == refunded.to == to
+    assert reference in cancelled.subject
+    assert "₹1,000.00" in refunded.subject and title in refunded.subject
+    assert refunded.images == [] and cancelled.images == []

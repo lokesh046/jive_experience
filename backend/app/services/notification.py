@@ -17,8 +17,12 @@ from app.core import mailer
 from app.core.config import Settings
 from app.core.errors import NotFoundError
 from app.core.mailer import InlineImage, Mail
+from app.core.money import format_inr
+from app.models.commerce import Booking
+from app.models.event import Event, EventStatus
+from app.models.user import User
 from app.repositories.catalogue import EventRepository
-from app.repositories.commerce import BookingRepository
+from app.repositories.commerce import BookingRepository, RefundRepository
 from app.repositories.fulfilment import TicketRepository
 from app.repositories.user import UserRepository
 from app.services.ticket import TicketService
@@ -42,6 +46,7 @@ class NotificationService:
         self.events = EventRepository(session)
         self.users = UserRepository(session)
         self.ticket_rows = TicketRepository(session)
+        self.refunds = RefundRepository(session)
 
     async def send_tickets(self, booking_id: uuid.UUID) -> bool:
         """Email the tickets for a booking. Returns False when email is off."""
@@ -115,4 +120,88 @@ class NotificationService:
         )
         await mailer.send_mail(self.settings, mail)
         logger.info("tickets_email_sent", booking_id=str(booking.id), tickets=len(rows))
+        return True
+
+    # ------------------------------------------------ cancellation & refund ---
+
+    async def _booking_context(self, booking_id: uuid.UUID) -> tuple[Booking, User, Event]:
+        booking = await self.bookings.get(booking_id)
+        if booking is None:
+            raise NotFoundError("Booking not found.", code="BOOKING_NOT_FOUND")
+        user = await self.users.get(booking.user_id)
+        event = await self.events.get(booking.event_id)
+        if user is None or event is None:
+            raise NotFoundError("Booking details not found.", code="BOOKING_NOT_FOUND")
+        await self.session.refresh(event, attribute_names=["venue"])
+        return booking, user, event
+
+    def _wrap(self, name: str, paragraphs: list[str], link: str, link_text: str) -> str:
+        body_style = (
+            "font:16px/1.5 -apple-system,Segoe UI,sans-serif;color:#111;max-width:520px;margin:auto"
+        )
+        inner = "".join(f"<p>{p}</p>" for p in paragraphs)
+        return (
+            f'<div style="{body_style}"><p>Hi {escape(name)},</p>{inner}'
+            f'<p><a href="{escape(link)}">{escape(link_text)}</a></p></div>'
+        )
+
+    async def send_cancellation(self, booking_id: uuid.UUID) -> bool:
+        """Tell the customer their booking was cancelled."""
+        if not self.settings.email_configured:
+            logger.warning("email_not_configured_skipping_cancel", booking_id=str(booking_id))
+            return False
+        booking, user, event = await self._booking_context(booking_id)
+        name = (user.full_name or "").split(" ")[0] or "there"
+        link = f"{self.settings.public_site_url.rstrip('/')}/tickets/{booking.reference}"
+        by_us = event.status is EventStatus.CANCELLED
+        what = (
+            f"{event.title} has been cancelled."
+            if by_us
+            else f"Your booking {booking.reference} for {event.title} has been cancelled."
+        )
+        refund_line = (
+            "A refund is being sent to your original payment method." if booking.total_paise else ""
+        )
+        subject = (
+            f"{event.title} has been cancelled"
+            if by_us
+            else f"Booking {booking.reference} cancelled"
+        )
+        lines = [what, f"Booking {booking.reference}.", refund_line, "Your tickets no longer work."]
+        lines = [line for line in lines if line]
+        mail = Mail(
+            to=user.email,
+            subject=subject,
+            text=f"Hi {name},\n\n" + "\n".join(lines) + f"\n\nDetails: {link}\n",
+            html=self._wrap(name, [escape(line) for line in lines], link, "View your booking"),
+        )
+        await mailer.send_mail(self.settings, mail)
+        logger.info("cancellation_email_sent", booking_id=str(booking.id))
+        return True
+
+    async def send_refund(self, refund_id: uuid.UUID) -> bool:
+        """Tell the customer a refund has been sent."""
+        if not self.settings.email_configured:
+            logger.warning("email_not_configured_skipping_refund", refund_id=str(refund_id))
+            return False
+        refund = await self.refunds.get(refund_id)
+        if refund is None:
+            raise NotFoundError("Refund not found.", code="REFUND_NOT_FOUND")
+        booking, user, event = await self._booking_context(refund.booking_id)
+        name = (user.full_name or "").split(" ")[0] or "there"
+        link = f"{self.settings.public_site_url.rstrip('/')}/tickets/{booking.reference}"
+        amount = format_inr(refund.amount_paise)
+        lines = [
+            f"We have refunded {amount} for {event.title} (booking {booking.reference}).",
+            "It goes back to the payment method you used. Banks can take a few working days "
+            "to show it in your account.",
+        ]
+        mail = Mail(
+            to=user.email,
+            subject=f"Your refund of {amount} for {event.title}",
+            text=f"Hi {name},\n\n" + "\n".join(lines) + f"\n\nDetails: {link}\n",
+            html=self._wrap(name, [escape(line) for line in lines], link, "View your booking"),
+        )
+        await mailer.send_mail(self.settings, mail)
+        logger.info("refund_email_sent", refund_id=str(refund.id))
         return True

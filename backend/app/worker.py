@@ -158,9 +158,19 @@ async def handle_event_cancelled(session: AsyncSession, payload: dict[str, Any])
         await session.commit()
 
 
-async def handle_notification(session: AsyncSession, payload: dict[str, Any]) -> None:
-    """Customer notifications — pending an email/SMS provider."""
-    logger.info("notification_pending_provider", payload=payload)
+def _notifications(session: AsyncSession) -> NotificationService:
+    settings = get_settings()
+    return NotificationService(session, settings, TicketService(session, OutboxService(session)))
+
+
+async def handle_booking_cancelled(session: AsyncSession, payload: dict[str, Any]) -> None:
+    sent = await _notifications(session).send_cancellation(uuid.UUID(payload["booking_id"]))
+    logger.info("cancellation_email_handled", booking_id=payload["booking_id"], sent=sent)
+
+
+async def handle_refund_completed(session: AsyncSession, payload: dict[str, Any]) -> None:
+    sent = await _notifications(session).send_refund(uuid.UUID(payload["refund_id"]))
+    logger.info("refund_email_handled", refund_id=payload["refund_id"], sent=sent)
 
 
 HANDLERS: dict[str, Handler] = {
@@ -169,8 +179,8 @@ HANDLERS: dict[str, Handler] = {
     TOPIC_TICKETS_ISSUED: handle_tickets_issued,
     TOPIC_REFUND_PROCESS: handle_refund_process,
     TOPIC_EVENT_CANCELLED: handle_event_cancelled,
-    TOPIC_BOOKING_CANCELLED: handle_notification,
-    TOPIC_REFUND_COMPLETED: handle_notification,
+    TOPIC_BOOKING_CANCELLED: handle_booking_cancelled,
+    TOPIC_REFUND_COMPLETED: handle_refund_completed,
 }
 
 
