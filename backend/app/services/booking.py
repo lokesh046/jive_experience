@@ -32,9 +32,11 @@ from app.repositories.catalogue import EventRepository, TicketCategoryRepository
 from app.repositories.commerce import BookingRepository, PaymentRepository
 from app.repositories.user import UserRepository
 from app.schemas.booking import BookingCreateRequest, ManualTicketRequest
+from app.schemas.promo import PromoCheckOut, PromoCheckRequest
 from app.services.audit import AuditService
 from app.services.inventory import InventoryService, RequestedItem
 from app.services.outbox import TOPIC_BOOKING_CONFIRMED, OutboxService
+from app.services.promo import PromoService
 
 logger = structlog.get_logger(__name__)
 
@@ -62,6 +64,7 @@ class BookingService:
         self.payments = PaymentRepository(session)
         self.events = EventRepository(session)
         self.audit = AuditService(session)
+        self.promos = PromoService(session)
 
     # ----------------------------------------------------------- create ---
 
@@ -116,6 +119,22 @@ class BookingService:
         subtotal = sum(item.line_total_paise for item in held)
         quantity = sum(item.quantity for item in held)
 
+        discount = 0
+        promo_id: uuid.UUID | None = None
+        if payload.promo_code:
+            # One customer's attempts are serialised, so two parallel requests cannot both
+            # pass a "once per customer" limit.
+            await self.inventory.lock_customer_event(customer.id, event.id)
+            try:
+                applied = await self.promos.redeem(
+                    payload.promo_code, event=event, customer=customer, subtotal_paise=subtotal
+                )
+            except Exception:
+                # The booking will not exist, so the tickets just held must not stay held.
+                await self.inventory.release_held(held)
+                raise
+            discount, promo_id = applied.discount_paise, applied.promo.id
+
         booking = Booking(
             reference=await self._unique_reference(),
             user_id=customer.id,
@@ -123,7 +142,9 @@ class BookingService:
             status=BookingStatus.PENDING,
             subtotal_paise=subtotal,
             fees_paise=0,
-            total_paise=subtotal,
+            discount_paise=discount,
+            promo_code_id=promo_id,
+            total_paise=subtotal - discount,
             quantity=quantity,
             currency=self.settings.default_currency,
             idempotency_key=payload.idempotency_key,
@@ -186,14 +207,51 @@ class BookingService:
         # an exception at the edge.
         await self.session.refresh(booking, attribute_names=["items"])
 
+        if booking.total_paise == 0:
+            # A code that covers the whole price: there is nothing to pay, so confirm now. The
+            # gateway cannot take a zero-amount payment, and the customer should not be sent
+            # to one.
+            await self.confirm_paid(booking)
+            await self.session.refresh(
+                booking, attribute_names=["status", "confirmed_at", "expires_at"]
+            )
+
         logger.info(
             "booking_created",
             booking_id=str(booking.id),
             reference=booking.reference,
             quantity=quantity,
-            total_paise=subtotal,
+            discount_paise=discount,
+            total_paise=booking.total_paise,
         )
         return booking, True
+
+    async def preview_promo(self, payload: PromoCheckRequest, *, customer: User) -> PromoCheckOut:
+        """What a code would take off these tickets, without holding anything.
+
+        Prices come from the database; the client only says which tickets and how many.
+        """
+        event = await self.events.public_by_slug(payload.event_slug)
+        if event is None:
+            raise NotFoundError("Event not found.", code="EVENT_NOT_FOUND")
+        prices = {c.id: c.price_paise for c in event.ticket_categories if c.is_active}
+        subtotal = 0
+        for item in payload.items:
+            if item.ticket_category_id not in prices:
+                raise NotFoundError(
+                    "Ticket category not found for this event.", code="CATEGORY_NOT_FOUND"
+                )
+            subtotal += prices[item.ticket_category_id] * item.quantity
+        applied = await self.promos.evaluate(
+            payload.code, event=event, customer=customer, subtotal_paise=subtotal
+        )
+        return PromoCheckOut(
+            code=applied.promo.code,
+            subtotal_paise=subtotal,
+            discount_paise=applied.discount_paise,
+            total_paise=subtotal - applied.discount_paise,
+            description=applied.promo.description,
+        )
 
     async def _unique_reference(self) -> str:
         for _ in range(8):
@@ -368,6 +426,7 @@ class BookingService:
     async def expire(self, booking: Booking) -> None:
         """Abandon a pending booking and return its tickets to sale."""
         await self.inventory.release_for_booking(booking.id)
+        await self.promos.release(booking.promo_code_id)
         booking.status = BookingStatus.EXPIRED
         booking.cancelled_at = datetime.now(UTC)
         await self.session.commit()
@@ -382,6 +441,7 @@ class BookingService:
         expired = await self.bookings.claim_expired(now=now, limit=limit)
         for booking in expired:
             await self.inventory.release_for_booking(booking.id)
+            await self.promos.release(booking.promo_code_id)
         if expired:
             await self.session.commit()
             logger.info("bookings_expired", count=len(expired))

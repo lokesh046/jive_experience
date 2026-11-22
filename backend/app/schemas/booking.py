@@ -34,6 +34,8 @@ class BookingCreateRequest(BaseModel):
     event_slug: Annotated[str, Field(min_length=1, max_length=160)]
     items: Annotated[list[BookingItemRequest], Field(min_length=1, max_length=10)]
     customer_note: Annotated[str | None, Field(default=None, max_length=500)] = None
+    # Optional promo code; the discount is always worked out on the server.
+    promo_code: Annotated[str | None, Field(default=None, max_length=40)] = None
     # Supplied by the client so a retried request returns the first booking
     # rather than holding the tickets twice.
     idempotency_key: Annotated[str | None, Field(default=None, max_length=80)] = None
@@ -58,6 +60,7 @@ class BookingOut(BaseModel):
     quantity: int
     subtotal_paise: int
     fees_paise: int
+    discount_paise: int = 0
     total_paise: int
     refunded_paise: int
     currency: str

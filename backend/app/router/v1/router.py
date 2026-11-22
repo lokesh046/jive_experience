@@ -13,6 +13,7 @@ from app.router.v1 import (
     admin_catalogue,
     admin_commerce,
     admin_leads,
+    admin_promos,
     admin_reports,
     admin_settings,
     auth,
@@ -44,6 +45,7 @@ api_router.include_router(admin_catalogue.router, prefix="/admin")
 api_router.include_router(admin_commerce.router, prefix="/admin")
 api_router.include_router(admin_reports.router, prefix="/admin")
 api_router.include_router(admin_leads.router, prefix="/admin")
+api_router.include_router(admin_promos.router, prefix="/admin")
 api_router.include_router(admin_settings.router, prefix="/admin")
 
 # Still to come:

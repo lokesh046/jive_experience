@@ -119,6 +119,7 @@ export interface Booking {
   quantity: number;
   subtotal_paise: number;
   fees_paise: number;
+  discount_paise?: number;
   total_paise: number;
   refunded_paise: number;
   currency: string;
@@ -340,3 +341,11 @@ export interface SubscriberPage extends Page<Subscriber> { active: number }
 
 export interface WaitlistRow { email: string; quantity: number; ticket_type: string | null; status: "WAITING" | "NOTIFIED" | "LEFT"; created_at: string; notified_at: string | null }
 export interface WaitlistPage extends Page<WaitlistRow> { waiting: number; notified: number }
+
+export interface PromoCheck { code: string; subtotal_paise: number; discount_paise: number; total_paise: number; description: string | null }
+export interface Promo {
+  id: string; code: string; description: string | null; discount_type: "PERCENT" | "FIXED";
+  percent_off: number | null; amount_off_paise: number | null; event_id: string | null;
+  max_uses: number | null; used_count: number; max_uses_per_customer: number | null;
+  valid_from: string | null; valid_until: string | null; is_active: boolean; created_at: string;
+}

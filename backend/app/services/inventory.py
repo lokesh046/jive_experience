@@ -188,6 +188,10 @@ class InventoryService:
             unit_price_paise=category.price_paise,
         )
 
+    async def release_held(self, held: Sequence[HeldItem]) -> None:
+        """Give back holds taken in this transaction when the booking is abandoned."""
+        await self._release_items(held)
+
     async def _release_items(self, held: Sequence[HeldItem]) -> None:
         for item in held:
             await self.inventory.release_hold(item.ticket_category.id, item.quantity)

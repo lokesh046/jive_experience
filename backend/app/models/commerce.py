@@ -169,6 +169,8 @@ class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     subtotal_paise: Mapped[int] = money_column(default=0)
     fees_paise: Mapped[int] = money_column(default=0)
+    # What a promo code took off the subtotal. The total is subtotal + fees - discount.
+    discount_paise: Mapped[int] = money_column(default=0, server_default="0")
     total_paise: Mapped[int] = money_column(default=0)
     refunded_paise: Mapped[int] = money_column(default=0)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
@@ -186,6 +188,10 @@ class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     cancellation_reason: Mapped[str | None] = mapped_column(String(500))
 
     customer_note: Mapped[str | None] = mapped_column(Text)
+
+    promo_code_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("promo_codes.id", ondelete="SET NULL")
+    )
 
     source: Mapped[BookingSource] = mapped_column(
         booking_source_enum,
@@ -207,8 +213,11 @@ class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("subtotal_paise >= 0", name="subtotal_not_negative"),
         CheckConstraint("fees_paise >= 0", name="fees_not_negative"),
         CheckConstraint("total_paise >= 0", name="total_not_negative"),
+        CheckConstraint("discount_paise >= 0", name="discount_not_negative"),
+        CheckConstraint("discount_paise <= subtotal_paise", name="discount_within_subtotal"),
         CheckConstraint(
-            "total_paise = subtotal_paise + fees_paise", name="total_is_subtotal_plus_fees"
+            "total_paise = subtotal_paise + fees_paise - discount_paise",
+            name="total_is_subtotal_plus_fees_minus_discount",
         ),
         # A refund can never exceed what was taken.
         CheckConstraint(

@@ -6,7 +6,7 @@ import { inr } from "@/lib/format";
 import { isPremiumType } from "@/lib/premium";
 import { TicketPreview } from "@/components/TicketPreview";
 import { WaitlistForm } from "@/components/WaitlistForm";
-import type { Availability, Booking, TicketCategoryPublic } from "@/lib/types";
+import type { Availability, Booking, PromoCheck, TicketCategoryPublic } from "@/lib/types";
 
 interface Props {
   slug: string;
@@ -48,6 +48,10 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
   const [cats, setCats] = useState(categories);
   const [picked, setPicked] = useState<string | null>(null);
   const [wanted, setWanted] = useState(1);
+  const [promoText, setPromoText] = useState("");
+  const [promo, setPromo] = useState<PromoCheck | null>(null);
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoErr, setPromoErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const keyRef = useRef<{ sig: string; key: string } | null>(null);
@@ -66,9 +70,9 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
     try {
       const saved = sessionStorage.getItem(storeKey);
       if (saved) {
-        const r = JSON.parse(saved) as { cat?: string; count?: number };
+        const r = JSON.parse(saved) as { cat?: string; count?: number; promo?: string };
         sessionStorage.removeItem(storeKey);
-        queueMicrotask(() => { if (r.cat) setPicked(r.cat); if (r.count) setWanted(r.count); });
+        queueMicrotask(() => { if (r.cat) setPicked(r.cat); if (r.count) setWanted(r.count); if (r.promo) setPromoText(r.promo); });
       }
     } catch {}
   }, [storeKey]);
@@ -90,12 +94,33 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", tick); };
   }, [onSale, refresh]);
 
-  const total = current ? current.price_paise * count : 0;
+  const listTotal = current ? current.price_paise * count : 0;
+  // With a code applied, the total is the server's figure; it is re-checked whenever the tickets change.
+  const total = promo ? promo.total_paise : listTotal;
+
+  async function check(code: string, catId: string, qty: number, quiet = false) {
+    setPromoBusy(true); if (!quiet) setPromoErr(null);
+    try {
+      setPromo(await api<PromoCheck>("bookings/promo-check", { method: "POST", json: { event_slug: slug, code, items: [{ ticket_category_id: catId, quantity: qty }] } }));
+      setPromoErr(null);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        try { sessionStorage.setItem(storeKey, JSON.stringify({ cat: catId, count: qty, promo: code })); } catch {}
+        rememberNext(`/events/${slug}#tickets`);
+        router.push("/signin");
+        return;
+      }
+      setPromo(null);
+      setPromoErr(e instanceof ApiError ? e.message : "We could not check that code. Please try again.");
+    } finally { setPromoBusy(false); }
+  }
+  const recheck = (catId: string, qty: number) => { if (promo) void check(promo.code, catId, qty, true); };
 
   function choose(c: TicketCategoryPublic) {
     setError(null);
     setPicked(c.id);
     setWanted(1);
+    recheck(c.id, 1);
   }
 
   async function checkout() {
@@ -104,11 +129,11 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
     setBusy(true);
     setError(null);
     // Same selection → same key, so a double-click or retry cannot create two bookings.
-    const sig = JSON.stringify(items);
+    const sig = JSON.stringify({ items, promo: promo?.code ?? null });
     if (keyRef.current?.sig !== sig) keyRef.current = { sig, key: crypto.randomUUID() };
-    const remember = () => { try { sessionStorage.setItem(storeKey, JSON.stringify({ cat: current.id, count })); } catch {} };
+    const remember = () => { try { sessionStorage.setItem(storeKey, JSON.stringify({ cat: current.id, count, promo: promo?.code ?? promoText })); } catch {} };
     try {
-      const b = await api<Booking>("bookings", { method: "POST", json: { event_slug: slug, items, idempotency_key: keyRef.current.key } });
+      const b = await api<Booking>("bookings", { method: "POST", json: { event_slug: slug, items, promo_code: promo?.code ?? null, idempotency_key: keyRef.current.key } });
       router.push(`/checkout/${b.reference}`);
     } catch (e) {
       setBusy(false);
@@ -164,9 +189,9 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
           {current ? (
             <div className="how">
               <div className="qty" role="group" aria-label={`${current.name} quantity`}>
-                <button type="button" aria-label="Fewer tickets" disabled={count <= floor} onClick={() => setWanted(count - 1)}>−</button>
+                <button type="button" aria-label="Fewer tickets" disabled={count <= floor} onClick={() => { setWanted(count - 1); if (current) recheck(current.id, count - 1); }}>−</button>
                 <output aria-live="polite">{count}</output>
-                <button type="button" aria-label="More tickets" disabled={count >= cap} onClick={() => setWanted(count + 1)}>+</button>
+                <button type="button" aria-label="More tickets" disabled={count >= cap} onClick={() => { setWanted(count + 1); if (current) recheck(current.id, count + 1); }}>+</button>
               </div>
               <p className="small">{current.name} · {inr(current.price_paise)} each. Maximum {Math.min(cap, maxPerCustomer)} per booking.</p>
             </div>
@@ -180,6 +205,25 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
               ? <div><span className="name">{current.name} × {count}</span><span>{inr(total)}</span></div>
               : <div><span>No tickets selected</span><span /></div>}
           </div>
+          {promo && promo.discount_paise > 0 && (
+            <div className="rows"><div><span className="name">Promo {promo.code}</span><span>−{inr(promo.discount_paise)}</span></div></div>
+          )}
+          {current && count > 0 && (
+            promo ? (
+              <p className="promo-on"><span>{promo.description ?? "Promo code applied"}</span> <button type="button" className="link" onClick={() => { setPromo(null); setPromoText(""); }}>Remove</button></p>
+            ) : (
+              <details className="promo-form">
+                <summary>Have a promo code?</summary>
+                <div className="promo-row">
+                  <label htmlFor="promo" className="sr">Promo code</label>
+                  <input id="promo" value={promoText} onChange={(e) => setPromoText(e.target.value.toUpperCase())} maxLength={40} autoComplete="off" placeholder="Enter code" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (promoText.trim() && current) void check(promoText.trim(), current.id, count); } }} />
+                  <button type="button" className="pill sm" disabled={promoBusy || !promoText.trim()} onClick={() => current && void check(promoText.trim(), current.id, count)}>{promoBusy ? "Checking…" : "Apply"}</button>
+                </div>
+                {promoErr && <p className="err" role="alert">{promoErr}</p>}
+              </details>
+            )
+          )}
+          {promoErr && promo === null && !promoText && <p className="err" role="alert">{promoErr}</p>}
           <div className="total"><span className="small">Total</span><strong>{inr(total)}</strong></div>
           <button className="pill full" type="button" disabled={!current || count < 1 || busy} onClick={checkout}>
             {busy ? "Reserving…" : "Continue to checkout"}

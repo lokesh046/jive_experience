@@ -246,6 +246,7 @@ export function CheckoutFlow({ reference }: { reference: string }) {
                 {booking.items.map((i) => (
                   <div key={i.ticket_category_id}><span className="name">{i.category_name} × {i.quantity}</span><span>{inr(i.line_total_paise)}</span></div>
                 ))}
+                {(booking.discount_paise ?? 0) > 0 && <div><span>Promo discount</span><span>−{inr(booking.discount_paise ?? 0)}</span></div>}
                 {booking.fees_paise > 0 && <div><span>Fees</span><span>{inr(booking.fees_paise)}</span></div>}
               </div>
               <div className="total"><span className="small">Total</span><strong>{inr(booking.total_paise)}</strong></div>

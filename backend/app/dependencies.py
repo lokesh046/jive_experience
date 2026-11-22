@@ -40,6 +40,7 @@ from app.services.leads import LeadService
 from app.services.outbox import OutboxService
 from app.services.payment import PaymentService
 from app.services.payment_provider import PaymentProvider, get_payment_provider
+from app.services.promo import PromoService
 from app.services.refund import RefundService
 from app.services.reports import ReportService
 from app.services.settings import SettingsService
@@ -152,6 +153,10 @@ def get_waitlist_service(
     return WaitlistService(session, outbox)
 
 
+def get_promo_service(session: DbSession) -> PromoService:
+    return PromoService(session)
+
+
 def get_outbox_service(session: DbSession) -> OutboxService:
     return OutboxService(session)
 
@@ -217,6 +222,7 @@ ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]
 OutboxServiceDep = Annotated[OutboxService, Depends(get_outbox_service)]
 LeadServiceDep = Annotated[LeadService, Depends(get_lead_service)]
 WaitlistServiceDep = Annotated[WaitlistService, Depends(get_waitlist_service)]
+PromoServiceDep = Annotated[PromoService, Depends(get_promo_service)]
 SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]
 
 

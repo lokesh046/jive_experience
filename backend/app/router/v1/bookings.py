@@ -24,6 +24,7 @@ from app.schemas.booking import (
     RefundQuoteOut,
     TicketOut,
 )
+from app.schemas.promo import PromoCheckOut, PromoCheckRequest
 
 router = APIRouter(tags=["bookings"])
 
@@ -49,6 +50,18 @@ async def create_booking(
     if not created:
         response.status_code = status.HTTP_200_OK
     return BookingOut.model_validate(booking)
+
+
+@router.post(
+    "/promo-check",
+    response_model=PromoCheckOut,
+    summary="What a promo code would take off these tickets",
+)
+async def promo_check(
+    payload: PromoCheckRequest, customer: RequireCustomer, service: BookingServiceDep
+) -> PromoCheckOut:
+    """Worked out on the server from the real prices. Holds nothing and uses nothing up."""
+    return await service.preview_promo(payload, customer=customer)
 
 
 @router.get("", response_model=Page[BookingOut], summary="Your bookings")

@@ -727,3 +727,13 @@ footer.site .wrap { flex-wrap: wrap; }
 .wait-box > summary::-webkit-details-marker { display: none; }
 .wait-grid { display: grid; grid-template-columns: 2fr 1.2fr 0.7fr; gap: 20px 28px; margin-bottom: 24px; }
 @media (max-width: 640px) { .wait-grid { grid-template-columns: 1fr; } }
+
+/* promo codes */
+.promo-form { margin: 18px 0 4px; font-size: 14px; }
+.promo-form > summary { cursor: pointer; color: var(--mute); list-style: none; }
+.promo-form > summary::-webkit-details-marker { display: none; }
+.promo-form > summary:hover { color: var(--fg); }
+.promo-row { display: flex; gap: 12px; align-items: flex-end; margin-top: 12px; }
+.promo-row input { text-transform: uppercase; letter-spacing: 0.06em; }
+.promo-on { margin: 14px 0 0; font-size: 14px; color: #6fd08c; display: flex; gap: 12px; align-items: baseline; }
+.promo-on .link { color: var(--mute); }
