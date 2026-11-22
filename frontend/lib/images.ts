@@ -1,7 +1,12 @@
 import { CLOUDINARY_CLOUD } from "./config";
 
-/** A site photo kept in Cloudinary under jive/site/. */
-export const site = (name: string) => `https://res.cloudinary.com/${CLOUDINARY_CLOUD}/image/upload/jive/site/${name}`;
+/**
+ * Site photos kept in Cloudinary under jive/site/. Browsers keep Cloudinary images for 30 days, so
+ * a replaced photo needs a new version number here, or visitors keep seeing the old one.
+ */
+const VERSION: Record<string, number> = { hero: 1795365071 };
+export const site = (name: string) =>
+  `https://res.cloudinary.com/${CLOUDINARY_CLOUD}/image/upload/${VERSION[name] ? `v${VERSION[name]}/` : ""}jive/site/${name}`;
 
 /** Placeholder pool for events that have no image yet. Stable per slug, so a card never changes between renders. */
 const POOL = [site("hero"), site("archive-vinyl"), site("archive-vault"), site("archive-warehouse")];
