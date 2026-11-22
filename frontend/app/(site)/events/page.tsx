@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { EventList } from "@/components/EventList";
-import { getEvents } from "@/lib/catalogue";
+import { getEvents, getPastEvents } from "@/lib/catalogue";
 import { SITE_URL } from "@/lib/config";
 
 export const metadata: Metadata = {
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function EventsPage() {
-  const events = await getEvents();
+  const [events, past] = await Promise.all([getEvents(), getPastEvents()]);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -21,7 +21,7 @@ export default async function EventsPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <div className="wrap">
         <h1>Events</h1>
-        <EventList events={events} />
+        <EventList events={events} past={past} />
       </div>
     </main>
   );

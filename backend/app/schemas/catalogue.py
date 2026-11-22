@@ -364,6 +364,7 @@ class EventDetail(BaseModel):
     sale_starts_at: datetime | None = None
     sale_ends_at: datetime | None = None
     on_sale: bool
+    is_past: bool = False
     venue: VenueOut
     banner_image_url: str | None = None
     thumbnail_image_url: str | None = None

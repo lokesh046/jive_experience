@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import sqlalchemy as sa
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -173,3 +174,29 @@ async def test_venue_details_are_saved_cleaned_limited_and_shown_on_the_event(
         url, headers=bearer(admin), json={"description": None, "image_urls": None, "benefits": None}
     )
     assert cleared.status_code == 200 and cleared.json()["benefits"] == []
+
+
+async def test_a_past_event_is_listed_as_past_and_is_not_on_sale(
+    api: AsyncClient, db_session: AsyncSession
+) -> None:
+    ahead, _ = await make_event(db_session)
+    gone, _ = await make_event(db_session)
+    ahead_slug, gone_slug = ahead.slug, gone.slug
+    await db_session.execute(
+        sa.text("UPDATE events SET starts_at = now() - interval '2 days' WHERE slug = :s"),
+        {"s": gone_slug},
+    )
+    await db_session.commit()
+    db_session.expire_all()  # the raw UPDATE bypassed the ORM's copy of the event
+
+    upcoming = (await api.get(f"/api/v1/events/{ahead_slug}")).json()
+    assert upcoming["is_past"] is False and upcoming["on_sale"] is True
+
+    past = (await api.get(f"/api/v1/events/{gone_slug}")).json()
+    assert past["is_past"] is True and past["on_sale"] is False
+
+    past_list = (await api.get("/api/v1/events?past=true&size=100")).json()["items"]
+    upcoming_list = (await api.get("/api/v1/events?size=100")).json()["items"]
+    assert gone_slug in [e["slug"] for e in past_list]
+    assert gone_slug not in [e["slug"] for e in upcoming_list]
+    assert ahead_slug in [e["slug"] for e in upcoming_list]

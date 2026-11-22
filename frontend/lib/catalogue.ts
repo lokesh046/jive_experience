@@ -23,6 +23,22 @@ export async function getEvents(): Promise<EventListItem[]> {
   }
 }
 
+/** Events that have already started, most recent first. */
+export async function getPastEvents(): Promise<EventListItem[]> {
+  "use cache";
+  cacheTag("events");
+  try {
+    const res = await fetch(`${API_V1}/events?past=true&size=50`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) throw new Error(String(res.status));
+    const page = (await res.json()) as Page<EventListItem>;
+    cacheLife("minutes");
+    return page.items;
+  } catch {
+    cacheLife("seconds");
+    return [];
+  }
+}
+
 export async function getEvent(slug: string): Promise<EventDetail | null> {
   "use cache";
   cacheTag("events");

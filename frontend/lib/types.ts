@@ -69,6 +69,7 @@ export interface EventDetail {
   sale_starts_at: string | null;
   sale_ends_at: string | null;
   on_sale: boolean;
+  is_past: boolean;
   venue: Venue;
   banner_image_url: string | null;
   thumbnail_image_url: string | null;

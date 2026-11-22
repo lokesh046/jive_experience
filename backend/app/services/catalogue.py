@@ -658,8 +658,12 @@ class CatalogueService:
     @classmethod
     def to_detail(cls, event: Event) -> dict[str, Any]:
         now = datetime.now(UTC)
+        # Once an event has started it is "past": the same cut-off the public list uses, and
+        # the point at which the booking service stops selling.
+        is_past = event.starts_at <= now
         on_sale = (
             event.status is EventStatus.PUBLISHED
+            and not is_past
             and (event.sale_starts_at is None or event.sale_starts_at <= now)
             and (event.sale_ends_at is None or event.sale_ends_at >= now)
         )
@@ -677,6 +681,7 @@ class CatalogueService:
             "sale_starts_at": event.sale_starts_at.isoformat() if event.sale_starts_at else None,
             "sale_ends_at": event.sale_ends_at.isoformat() if event.sale_ends_at else None,
             "on_sale": on_sale,
+            "is_past": is_past,
             "venue": {
                 "id": str(event.venue.id),
                 "name": event.venue.name,

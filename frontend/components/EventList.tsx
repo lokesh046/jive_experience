@@ -12,7 +12,9 @@ function haystack(e: EventListItem): string {
 }
 
 /** Search and the city filter run in the browser over the already-loaded list: instant, no request. */
-export function EventList({ events }: { events: EventListItem[] }) {
+export function EventList({ events: upcoming, past = [] }: { events: EventListItem[]; past?: EventListItem[] }) {
+  const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
+  const events = tab === "past" ? past : upcoming;
   const [city, setCity] = useState("all");
   const [query, setQuery] = useState("");
   const input = useRef<HTMLInputElement>(null);
@@ -24,6 +26,7 @@ export function EventList({ events }: { events: EventListItem[] }) {
     const q = new URLSearchParams(window.location.search).get("q");
     queueMicrotask(() => {
       if (q) setQuery(q.slice(0, 80));
+      if (new URLSearchParams(window.location.search).get("tab") === "past") setTab("past");
       if (window.location.hash === "#search") input.current?.focus();
     });
   }, []);
@@ -43,6 +46,12 @@ export function EventList({ events }: { events: EventListItem[] }) {
 
   return (
     <>
+      {past.length > 0 && (
+        <div className="tabs" role="tablist" aria-label="Events" style={{ marginTop: 28 }}>
+          <button role="tab" type="button" aria-selected={tab === "upcoming"} onClick={() => { setTab("upcoming"); setCity("all"); }}>Upcoming{upcoming.length ? ` (${upcoming.length})` : ""}</button>
+          <button role="tab" type="button" aria-selected={tab === "past"} onClick={() => { setTab("past"); setCity("all"); }}>Past ({past.length})</button>
+        </div>
+      )}
       <div className="find" role="search">
         <label htmlFor="event-search" className="sr">Search events</label>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
@@ -73,11 +82,11 @@ export function EventList({ events }: { events: EventListItem[] }) {
         {shown.length === 0 && (
           searching || city !== "all"
             ? <p className="empty">Nothing matches{searching ? ` “${query.trim()}”` : ""}. <button type="button" className="link" onClick={() => { type(""); setCity("all"); }}>Show all events</button></p>
-            : <p className="empty">No upcoming nights yet. New dates are announced here first.</p>
+            : <p className="empty">{tab === "past" ? "No past events yet." : "No upcoming nights yet. New dates are announced here first."}</p>
         )}
         {shown.length > 0 && (
           <div className="cards">
-            {shown.map((e, i) => <EventCard key={e.id} event={e} priority={i < 3} />)}
+            {shown.map((e, i) => <EventCard key={e.id} event={e} priority={i < 3} past={tab === "past"} />)}
           </div>
         )}
       </div>

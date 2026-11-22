@@ -44,6 +44,8 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
   const cancelled = e.status === "CANCELLED";
   const saleMessage = cancelled
     ? "This event has been cancelled."
+    : e.is_past
+      ? "This night has passed. Tickets are no longer on sale."
     : e.is_sold_out
       ? "This event is sold out."
       : e.sale_starts_at && new Date(e.sale_starts_at) > new Date()
@@ -91,9 +93,10 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
             <time dateTime={e.starts_at}>{longDate(e.starts_at, e.timezone)}, {timeOf(e.starts_at, e.timezone)}</time>
           </p>
           <p className="small">{e.venue.name}, {e.venue.city}</p>
+          {e.is_past && !cancelled && <p className="past-tag">Past event</p>}
           <div className="ev-actions">
-            <Link className="pill" href="#tickets">{e.on_sale ? "Get tickets" : "See details"}</Link>
-            <AddToCalendar event={{ id: e.id, slug: e.slug, title: e.title, subtitle: e.subtitle, starts_at: e.starts_at, ends_at: e.ends_at, where: [e.venue.name, e.venue.address_line1, e.venue.city, e.venue.state, e.venue.postal_code].filter(Boolean).join(", "), url: `${SITE_URL}/events/${e.slug}` }} />
+            <Link className="pill" href={e.is_past ? "/events" : "#tickets"}>{e.is_past ? "See upcoming events" : e.on_sale ? "Get tickets" : "See details"}</Link>
+            {!e.is_past && <AddToCalendar event={{ id: e.id, slug: e.slug, title: e.title, subtitle: e.subtitle, starts_at: e.starts_at, ends_at: e.ends_at, where: [e.venue.name, e.venue.address_line1, e.venue.city, e.venue.state, e.venue.postal_code].filter(Boolean).join(", "), url: `${SITE_URL}/events/${e.slug}` }} />}
           </div>
         </header>
 
