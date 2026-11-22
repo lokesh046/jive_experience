@@ -44,6 +44,7 @@ from app.services.booking import BookingService
 from app.services.cache import CatalogueCache
 from app.services.catalogue import CatalogueService
 from app.services.inventory import InventoryService
+from app.services.notification import NotificationService
 from app.services.outbox import (
     TOPIC_BOOKING_CANCELLED,
     TOPIC_BOOKING_CONFIRMED,
@@ -105,16 +106,16 @@ async def handle_payment_captured(session: AsyncSession, payload: dict[str, Any]
 
 
 async def handle_tickets_issued(session: AsyncSession, payload: dict[str, Any]) -> None:
-    """Deliver the tickets to the customer.
+    """Email the tickets to the customer.
 
-    Pending the transactional email provider — see docs/open-decisions.md.
-    Logged rather than silently dropped so the queue shows what is waiting.
+    A separate outbox message from issuance, so a bounced email is retried on
+    its own and can never undo or delay the tickets themselves.
     """
-    logger.info(
-        "ticket_delivery_pending_email_provider",
-        booking_id=payload.get("booking_id"),
-        ticket_count=payload.get("ticket_count"),
-    )
+    settings = get_settings()
+    outbox = OutboxService(session)
+    notifications = NotificationService(session, settings, TicketService(session, outbox))
+    sent = await notifications.send_tickets(uuid.UUID(payload["booking_id"]))
+    logger.info("tickets_email_handled", booking_id=payload.get("booking_id"), sent=sent)
 
 
 async def handle_refund_process(session: AsyncSession, payload: dict[str, Any]) -> None:

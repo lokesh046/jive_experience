@@ -112,6 +112,18 @@ class Settings(BaseSettings):
     cloudinary_api_key: str | None = None
     cloudinary_api_secret: SecretStr | None = None
 
+    # Transactional email over SMTP (Gmail: smtp.gmail.com, port 587, an app
+    # password). Unset means email is switched off: the worker logs and moves on
+    # instead of retrying a message that can never be sent.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    mail_from: str | None = None
+    mail_from_name: str = "JIVE Events"
+    # Where customers open their booking from an email.
+    public_site_url: str = "http://localhost:3000"
+
     # --------------------------------------------------------- worker ----
     worker_poll_interval_seconds: float = 2.0
     worker_batch_size: int = 20
@@ -207,6 +219,10 @@ class Settings(BaseSettings):
         if self.qr_signing_key:
             return self.qr_signing_key.get_secret_value()
         return self.secret_key.get_secret_value()
+
+    @property
+    def email_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_username and self.smtp_password and self.mail_from)
 
     @computed_field(repr=False)  # type: ignore[prop-decorator]
     @property

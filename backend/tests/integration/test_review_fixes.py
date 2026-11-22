@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import sqlalchemy as sa
 from httpx import AsyncClient
+from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -1052,3 +1053,90 @@ async def test_assigning_staff_returns_the_assignment(racing_sessions) -> None:
                 sa.text("DELETE FROM users WHERE id IN (:a, :s)"), {"a": admin.id, "s": staff.id}
             )
             await cleanup.commit()
+
+
+async def _confirmed_booking_with_tickets(
+    db_session: AsyncSession, quantity: int
+) -> tuple[User, Booking, Event]:
+    event, category = await make_event(db_session)
+    customer = User(
+        role=UserRole.CUSTOMER,
+        status=UserStatus.ACTIVE,
+        email=unique_email("mail"),
+        full_name="Aarav Mehta",
+    )
+    db_session.add(customer)
+    await db_session.flush()
+    booking = Booking(
+        reference=f"JIVE-{uuid.uuid4().hex[:8].upper()}",
+        user_id=customer.id,
+        event_id=event.id,
+        status=BookingStatus.CONFIRMED,
+        subtotal_paise=100000 * quantity,
+        fees_paise=0,
+        total_paise=100000 * quantity,
+        quantity=quantity,
+        confirmed_at=datetime.now(UTC),
+    )
+    db_session.add(booking)
+    await db_session.flush()
+    db_session.add(
+        BookingItem(
+            booking_id=booking.id,
+            ticket_category_id=category.id,
+            category_name="General",
+            unit_price_paise=100000,
+            quantity=quantity,
+            line_total_paise=100000 * quantity,
+        )
+    )
+    await db_session.flush()
+    await TicketService(db_session, OutboxService(db_session)).issue_for_booking(booking.id)
+    return customer, booking, event
+
+
+async def test_ticket_email_carries_every_qr_to_the_customer(
+    db_session: AsyncSession, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.mailer import Mail
+    from app.services.notification import NotificationService
+
+    customer, booking, event = await _confirmed_booking_with_tickets(db_session, quantity=2)
+    sent: list[Mail] = []
+
+    async def fake_send(_settings: Settings, mail: Mail) -> None:
+        sent.append(mail)
+
+    monkeypatch.setattr("app.core.mailer.send_mail", fake_send)
+    on = settings.model_copy(
+        update={
+            "smtp_host": "smtp.example.com",
+            "smtp_username": "u",
+            "smtp_password": SecretStr("p"),
+            "mail_from": "tickets@example.com",
+        }
+    )
+    tickets = TicketService(db_session, OutboxService(db_session), on)
+    assert await NotificationService(db_session, on, tickets).send_tickets(booking.id) is True
+
+    (mail,) = sent
+    assert mail.to == customer.email
+    assert event.title in mail.subject
+    assert len(mail.images) == 2 and all(i.png[:4] == b"\x89PNG" for i in mail.images)
+    assert booking.reference in mail.html and booking.reference in mail.text
+    # The scannable token must never be written into the email text, only drawn as an image.
+    for ticket in await TicketRepository(db_session).for_booking(booking.id):
+        assert tickets.qr_token_for(ticket) not in mail.html + mail.text
+
+
+async def test_ticket_email_is_skipped_quietly_when_email_is_not_set_up(
+    db_session: AsyncSession, settings: Settings
+) -> None:
+    from app.services.notification import NotificationService
+
+    _, booking, _ = await _confirmed_booking_with_tickets(db_session, quantity=1)
+    assert settings.email_configured is False
+    tickets = TicketService(db_session, OutboxService(db_session), settings)
+    assert (
+        await NotificationService(db_session, settings, tickets).send_tickets(booking.id) is False
+    )
