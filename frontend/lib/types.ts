@@ -237,6 +237,7 @@ export interface EventAdmin {
   sale_ends_at: string | null;
   banner_image_url: string | null;
   thumbnail_image_url: string | null;
+  gallery_image_urls: string[];
   max_tickets_per_customer: number;
   requires_attendee_name: boolean;
   terms_and_conditions: string | null;

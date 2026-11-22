@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ApiError, api } from "@/lib/api-client";
 import { CATEGORIES, fromIst, label, rupees, toIst, toPaise } from "@/lib/admin";
+import { GalleryField } from "@/components/admin/GalleryField";
 import { PhotoField } from "@/components/admin/PhotoField";
 import { useData } from "@/lib/use-data";
 import type { Attendance, CategoryAdmin, EventAdmin, Page, StaffAssignment, UserAdmin, VenueFull } from "@/lib/types";
@@ -11,7 +12,7 @@ import type { Attendance, CategoryAdmin, EventAdmin, Page, StaffAssignment, User
 const blank = {
   title: "", slug: "", subtitle: "", description: "", category: "CONCERT", venue_id: "",
   starts_at: "", ends_at: "", sale_starts_at: "", sale_ends_at: "",
-  banner_image_url: "", thumbnail_image_url: "", max_tickets_per_customer: "4",
+  banner_image_url: "", thumbnail_image_url: "", gallery: [] as string[], max_tickets_per_customer: "4",
   requires_attendee_name: false, terms_and_conditions: "", is_featured: false,
 };
 type Form = typeof blank;
@@ -31,7 +32,7 @@ export function EventEditor({ eventId }: { eventId?: string }) {
     ? {
         title: e0.title, slug: e0.slug, subtitle: e0.subtitle ?? "", description: e0.description ?? "", category: e0.category, venue_id: e0.venue.id,
         starts_at: toIst(e0.starts_at), ends_at: toIst(e0.ends_at), sale_starts_at: toIst(e0.sale_starts_at), sale_ends_at: toIst(e0.sale_ends_at),
-        banner_image_url: e0.banner_image_url ?? "", thumbnail_image_url: e0.thumbnail_image_url ?? "",
+        banner_image_url: e0.banner_image_url ?? "", thumbnail_image_url: e0.thumbnail_image_url ?? "", gallery: e0.gallery_image_urls ?? [],
         max_tickets_per_customer: String(e0.max_tickets_per_customer), requires_attendee_name: e0.requires_attendee_name,
         terms_and_conditions: e0.terms_and_conditions ?? "", is_featured: e0.is_featured,
       }
@@ -48,7 +49,7 @@ export function EventEditor({ eventId }: { eventId?: string }) {
     const body = {
       title: f.title.trim(), subtitle: nul(f.subtitle), description: nul(f.description), category: f.category, venue_id: f.venue_id,
       starts_at: fromIst(f.starts_at), ends_at: fromIst(f.ends_at), sale_starts_at: fromIst(f.sale_starts_at), sale_ends_at: fromIst(f.sale_ends_at),
-      banner_image_url: nul(f.banner_image_url), thumbnail_image_url: nul(f.thumbnail_image_url),
+      banner_image_url: nul(f.banner_image_url), thumbnail_image_url: nul(f.thumbnail_image_url), gallery_image_urls: f.gallery,
       max_tickets_per_customer: Number(f.max_tickets_per_customer), requires_attendee_name: f.requires_attendee_name,
       terms_and_conditions: nul(f.terms_and_conditions), is_featured: f.is_featured,
     };
@@ -99,6 +100,7 @@ export function EventEditor({ eventId }: { eventId?: string }) {
           <div className="f chk" style={{ alignSelf: "end" }}><input id="an" type="checkbox" checked={f.requires_attendee_name} onChange={set("requires_attendee_name")} disabled={!editable} /><label htmlFor="an">Ask for each attendee&apos;s name</label></div>
           <PhotoField label="Banner photo" value={f.banner_image_url} onChange={(u) => setEdits((x) => ({ ...x, banner_image_url: u }))} disabled={!editable} hint="Shown at the top of the event page. Wide photos work best." />
           <PhotoField label="Card thumbnail" value={f.thumbnail_image_url} onChange={(u) => setEdits((x) => ({ ...x, thumbnail_image_url: u }))} disabled={!editable} hint="Shown on the homepage and events list. Leave empty to reuse the banner." />
+          <GalleryField value={f.gallery} onChange={(g) => setEdits((x) => ({ ...x, gallery: g }))} disabled={!editable} />
           <div className="f wide"><label htmlFor="d">Description</label><textarea id="d" value={f.description} onChange={set("description")} style={{ minHeight: 160 }} disabled={!editable} /><span className="hint">Separate paragraphs with a blank line.</span></div>
           <div className="f wide"><label htmlFor="tc">Terms for this event</label><textarea id="tc" value={f.terms_and_conditions} onChange={set("terms_and_conditions")} disabled={!editable} /></div>
           <div className="f chk"><input id="ft" type="checkbox" checked={f.is_featured} onChange={set("is_featured")} disabled={!editable} /><label htmlFor="ft">Show in the homepage banner</label><span className="hint" style={{ marginLeft: 12 }}>Uses this event&apos;s banner photo, title and date. If several are ticked, the soonest shows.</span></div>

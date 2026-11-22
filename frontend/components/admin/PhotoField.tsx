@@ -1,13 +1,8 @@
 "use client";
 import { useId, useState } from "react";
-import { ApiError, api } from "@/lib/api-client";
+import { photoProblem, uploadPhoto } from "@/lib/upload";
 
-interface Signed {
-  upload_url: string; api_key: string; timestamp: number; signature: string; folder: string; allowed_formats: string;
-}
-const MAX_BYTES = 8 * 1024 * 1024;
-
-/** Uploads straight to Cloudinary with a one-use signature from the API. */
+/** One photo, uploaded straight to Cloudinary. */
 export function PhotoField({
   label, value, onChange, disabled, hint,
 }: { label: string; value: string; onChange: (url: string) => void; disabled?: boolean; hint?: string }) {
@@ -18,27 +13,12 @@ export function PhotoField({
   async function pick(file: File | undefined) {
     if (!file) return;
     setErr(null);
-    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return setErr("Use a JPG, PNG or WebP photo.");
-    if (file.size > MAX_BYTES) return setErr("That photo is over 8 MB. Choose a smaller one.");
+    const bad = photoProblem(file);
+    if (bad) return setErr(bad);
     setBusy(true);
-    try {
-      const s = await api<Signed>("/admin/uploads/sign", { method: "POST" });
-      const body = new FormData();
-      body.append("file", file);
-      body.append("api_key", s.api_key);
-      body.append("timestamp", String(s.timestamp));
-      body.append("signature", s.signature);
-      body.append("folder", s.folder);
-      body.append("allowed_formats", s.allowed_formats);
-      const res = await fetch(s.upload_url, { method: "POST", body });
-      if (!res.ok) throw new Error("upload");
-      const out = (await res.json()) as { secure_url: string };
-      onChange(out.secure_url);
-    } catch (e) {
-      setErr(e instanceof ApiError && e.status === 503 ? "Photo uploads are not set up yet." : "The upload did not go through. Please try again.");
-    } finally {
-      setBusy(false);
-    }
+    try { onChange(await uploadPhoto(file)); }
+    catch (e) { setErr(e instanceof Error ? e.message : "The upload did not go through."); }
+    finally { setBusy(false); }
   }
 
   return (

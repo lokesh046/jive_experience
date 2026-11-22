@@ -6,6 +6,7 @@
  * calls /api/*, this handler adds the bearer token, and refreshes it when it has
  * expired. It also removes the need for CORS.
  */
+import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { API_V1 } from "@/lib/config";
 
@@ -137,6 +138,11 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
     return res;
   }
 
+  // An admin changed events, venues or ticket types: drop the cached public pages now,
+  // so the change shows up straight away instead of after the cache lifetime.
+  if (upstream.ok && hasBody && joined.startsWith("admin/") && /^admin\/(events|venues)/.test(joined)) {
+    revalidateTag("events", { expire: 0 });
+  }
   const buf = upstream.status === 204 ? null : await upstream.arrayBuffer();
   const res = passthrough(upstream, buf);
   // Sessions that began before the role cookie existed get it from /auth/me.

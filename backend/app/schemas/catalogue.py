@@ -156,7 +156,9 @@ class EventCreate(BaseModel):
     sale_ends_at: datetime | None = None
     banner_image_url: Annotated[str | None, Field(default=None, max_length=1024)] = None
     thumbnail_image_url: Annotated[str | None, Field(default=None, max_length=1024)] = None
-    gallery_image_urls: list[str] | None = None
+    gallery_image_urls: Annotated[
+        list[Annotated[str, Field(max_length=1024)]] | None, Field(default=None, max_length=10)
+    ] = None
     max_tickets_per_customer: Annotated[int, Field(default=4, ge=1, le=100)] = 4
     requires_attendee_name: bool = False
     cancellation_policy: dict[str, Any] | None = None
@@ -193,7 +195,9 @@ class EventUpdate(BaseModel):
     sale_ends_at: datetime | None = None
     banner_image_url: Annotated[str | None, Field(default=None, max_length=1024)] = None
     thumbnail_image_url: Annotated[str | None, Field(default=None, max_length=1024)] = None
-    gallery_image_urls: list[str] | None = None
+    gallery_image_urls: Annotated[
+        list[Annotated[str, Field(max_length=1024)]] | None, Field(default=None, max_length=10)
+    ] = None
     max_tickets_per_customer: Annotated[int | None, Field(default=None, ge=1, le=100)] = None
     requires_attendee_name: bool | None = None
     cancellation_policy: dict[str, Any] | None = None

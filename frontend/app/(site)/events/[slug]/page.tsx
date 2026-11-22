@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { Photo } from "@/components/Photo";
+import { EventGallery } from "@/components/EventGallery";
 import { TicketPicker } from "@/components/TicketPicker";
 import { getEvent, getEvents } from "@/lib/catalogue";
 import { SITE_NAME, SITE_URL } from "@/lib/config";
@@ -72,6 +72,8 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
     })),
   };
 
+  const photos = [...new Set([e.banner_image_url, ...e.gallery_image_urls].filter((u): u is string => !!u))];
+  if (photos.length === 0) photos.push(site("hero"));
   const paragraphs = (e.description ?? "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 
   return (
@@ -89,9 +91,7 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
           </p>
         </header>
 
-        <div className="ev-photo">
-          <Photo src={e.banner_image_url ?? site("hero")} alt={`${e.title} at ${e.venue.name}`} sizes="(max-width: 1000px) 100vw, 1000px" priority />
-        </div>
+        <EventGallery photos={photos} title={e.title} />
 
         <div className="prose">
           {paragraphs.length > 0 && (

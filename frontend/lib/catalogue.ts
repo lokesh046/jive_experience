@@ -1,4 +1,4 @@
-import { cacheLife } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 import { API_V1 } from "./config";
 import type { EventDetail, EventListItem, Page } from "./types";
 
@@ -10,6 +10,7 @@ import type { EventDetail, EventListItem, Page } from "./types";
  */
 export async function getEvents(): Promise<EventListItem[]> {
   "use cache";
+  cacheTag("events");
   try {
     const res = await fetch(`${API_V1}/events?size=50`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error(String(res.status));
@@ -24,6 +25,7 @@ export async function getEvents(): Promise<EventListItem[]> {
 
 export async function getEvent(slug: string): Promise<EventDetail | null> {
   "use cache";
+  cacheTag("events");
   try {
     const res = await fetch(`${API_V1}/events/${encodeURIComponent(slug)}`, { signal: AbortSignal.timeout(5000) });
     if (res.status === 404) {
