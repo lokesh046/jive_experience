@@ -1,7 +1,6 @@
 "use client";
-import Link from "next/link";
+import { EventCard } from "./EventCard";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { dayMonth, inr } from "@/lib/format";
 import type { EventListItem } from "@/lib/types";
 
 const fold = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -76,20 +75,11 @@ export function EventList({ events }: { events: EventListItem[] }) {
             ? <p className="empty">Nothing matches{searching ? ` “${query.trim()}”` : ""}. <button type="button" className="link" onClick={() => { type(""); setCity("all"); }}>Show all events</button></p>
             : <p className="empty">No upcoming nights yet. New dates are announced here first.</p>
         )}
-        {shown.map((e) => (
-          <article className="row" key={e.id}>
-            <div className="d">{dayMonth(e.starts_at, e.timezone)}</div>
-            <div>
-              <h3><Link href={`/events/${e.slug}`}>{e.title}</Link></h3>
-              {e.subtitle && <p>{e.subtitle}</p>}
-              <small>{e.venue_name}, {e.city}</small>
-            </div>
-            <div className="r">
-              {e.is_sold_out ? <span className="muted">Sold out</span> : e.starting_price_paise != null && <span>From {inr(e.starting_price_paise)}</span>}
-              <Link className="pill sm" href={`/events/${e.slug}`}>{e.is_sold_out ? "Details" : "Book"}</Link>
-            </div>
-          </article>
-        ))}
+        {shown.length > 0 && (
+          <div className="cards">
+            {shown.map((e, i) => <EventCard key={e.id} event={e} priority={i < 3} />)}
+          </div>
+        )}
       </div>
     </>
   );

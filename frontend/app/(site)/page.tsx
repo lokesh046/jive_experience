@@ -2,6 +2,7 @@ import { site } from "@/lib/images";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { ArchiveMorph } from "@/components/ArchiveMorph";
 import { EventCard } from "@/components/EventCard";
 import { Photo } from "@/components/Photo";
 import { Ticker } from "@/components/Ticker";
@@ -104,14 +105,7 @@ async function HomeContent() {
       <section className="block">
         <div className="wrap">
           <h2>From the archive</h2>
-          <div className="arch">
-            {ARCHIVE.map((a) => (
-              <figure key={a.caption}>
-                <div className="ph"><Photo src={a.img} alt="" sizes="(max-width: 820px) 100vw, 320px" /></div>
-                <figcaption><p>{a.caption}</p></figcaption>
-              </figure>
-            ))}
-          </div>
+          <ArchiveMorph photos={ARCHIVE} />
         </div>
       </section>
     </main>
