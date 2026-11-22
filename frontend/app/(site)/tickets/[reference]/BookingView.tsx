@@ -102,13 +102,14 @@ export function BookingView({ reference }: { reference: string }) {
 
         {tickets.length > 0 ? (
           <div style={{ marginTop: 36 }}>
-            {tickets.map((t) => {
+            {tickets.map((t, n) => {
               const used = t.status === "CHECKED_IN";
               return (
                 <div className="tk" key={t.id}>
                   {t.qr_token ? <QrCode value={t.qr_token} /> : <div className="void">{used ? "This ticket has been scanned. The code is no longer shown." : "This ticket is no longer valid."}</div>}
                   <div>
-                    <h3>{b.items.find((i) => i.ticket_category_id === t.ticket_category_id)?.category_name ?? "Ticket"}</h3>
+                    <span className="cat">{b.items.find((i) => i.ticket_category_id === t.ticket_category_id)?.category_name ?? "Ticket"}</span>
+                    <h3>Ticket {n + 1} of {tickets.length}</h3>
                     <p className="serial" style={{ marginTop: 6 }}>{t.serial}</p>
                     <p className="small" style={{ marginTop: 6 }}>{t.qr_token ? "Valid until the end of the event" : used ? "Used" : "Not valid"}</p>
                   </div>

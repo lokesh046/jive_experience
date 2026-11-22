@@ -63,9 +63,10 @@ export function MyTickets() {
               <div className="d">{ev ? dayMonth(ev.starts_at, ev.timezone) : b.reference}</div>
               <div>
                 <h3>{ev?.title ?? "Booking"}</h3>
-                <p className="small" style={{ marginTop: 4 }}>
-                  {ev ? `${ev.venue_name}, ${ev.city} · ` : ""}{b.items.map((i) => `${i.quantity} × ${i.category_name}`).join(", ")}
-                </p>
+                {ev && <p className="small" style={{ marginTop: 4 }}>{ev.venue_name}, {ev.city}</p>}
+                <ul className="cats" aria-label="Ticket types">
+                  {b.items.map((i) => <li key={i.ticket_category_id}><b>{i.category_name}</b> × {i.quantity}</li>)}
+                </ul>
               </div>
               <div className="r">{inr(b.total_paise)}<span>{LABEL[b.status] ?? b.status}</span></div>
             </Link>
