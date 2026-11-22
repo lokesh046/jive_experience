@@ -132,3 +132,44 @@ async def test_event_location_link_is_stored_shown_and_must_be_a_web_link(
 
     cleared = await api.patch(url, headers=bearer(admin), json={"location_url": "   "})
     assert cleared.status_code == 200 and cleared.json()["location_url"] is None
+
+
+async def test_venue_details_are_saved_cleaned_limited_and_shown_on_the_event(
+    api: AsyncClient, db_session: AsyncSession, google: StubGoogleClient
+) -> None:
+    event, _ = await make_event(db_session)
+    venue_id = event.venue_id
+    slug = event.slug
+    await db_session.commit()
+    admin = await sign_in_as(api, google, await seed_admin(db_session))
+    url = f"/api/v1/admin/venues/{venue_id}"
+
+    # A venue with nothing filled in has empty lists, not nulls, on the event page.
+    bare = (await api.get(f"/api/v1/events/{slug}")).json()["venue"]
+    assert bare["description"] is None and bare["image_urls"] == [] and bare["benefits"] == []
+
+    saved = await api.patch(
+        url,
+        headers=bearer(admin),
+        json={
+            "description": "A restored mill hall.",
+            "image_urls": ["https://res.cloudinary.com/demo/image/upload/a.jpg", "  "],
+            "benefits": ["  Free parking ", "", "Step-free access"],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert body["image_urls"] == ["https://res.cloudinary.com/demo/image/upload/a.jpg"]
+    assert body["benefits"] == ["Free parking", "Step-free access"]
+
+    shown = (await api.get(f"/api/v1/events/{slug}")).json()["venue"]
+    assert shown["description"] == "A restored mill hall."
+    assert shown["benefits"] == ["Free parking", "Step-free access"]
+
+    for bad in ({"benefits": [f"b{i}" for i in range(13)]}, {"image_urls": ["u"] * 9}):
+        assert (await api.patch(url, headers=bearer(admin), json=bad)).status_code == 422
+    # null clears; it must not crash
+    cleared = await api.patch(
+        url, headers=bearer(admin), json={"description": None, "image_urls": None, "benefits": None}
+    )
+    assert cleared.status_code == 200 and cleared.json()["benefits"] == []

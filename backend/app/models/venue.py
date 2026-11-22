@@ -11,6 +11,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from sqlalchemy import CheckConstraint, Index, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -37,6 +38,12 @@ class Venue(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     seating_capacity: Mapped[int | None] = mapped_column()
 
     directions: Mapped[str | None] = mapped_column(Text)
+
+    # What the place is like, for the event page: a few words about it, photos of it,
+    # and what it offers (parking, bar, step-free access...).
+    description: Mapped[str | None] = mapped_column(Text)
+    image_urls: Mapped[list[str] | None] = mapped_column(JSONB)
+    benefits: Mapped[list[str] | None] = mapped_column(JSONB)
     map_url: Mapped[str | None] = mapped_column(String(512))
 
     __table_args__ = (

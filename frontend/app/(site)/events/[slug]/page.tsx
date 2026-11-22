@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { EventLocation } from "@/components/EventLocation";
 import { Lineup } from "@/components/Lineup";
+import { VenueDetails } from "@/components/VenueDetails";
 import { EventGallery } from "@/components/EventGallery";
 import { TicketPicker } from "@/components/TicketPicker";
 import { getEvent, getEvents } from "@/lib/catalogue";
@@ -103,11 +104,9 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
               {paragraphs.map((p, i) => <p key={i}>{p}</p>)}
             </>
           )}
-          <h2>The venue</h2>
-          <p>{e.venue.name}, {e.venue.city}{e.venue.state ? `, ${e.venue.state}` : ""}.</p>
-          {e.venue.directions && <p>{e.venue.directions}</p>}
-          {e.venue.map_url && <p><a className="link" href={e.venue.map_url} rel="noopener noreferrer" target="_blank">Open in maps</a></p>}
         </div>
+
+        <VenueDetails venue={e.venue} />
 
         <Lineup performers={e.lineup} zone={e.timezone} eventStart={e.starts_at} />
 

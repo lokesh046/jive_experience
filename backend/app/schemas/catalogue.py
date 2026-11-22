@@ -12,7 +12,14 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.models.event import EventCategory, EventStatus
 
@@ -28,6 +35,36 @@ def slugify(value: str) -> str:
 # ------------------------------------------------------------------ venues ---
 
 
+def _clean_list(value: object) -> object:
+    """Trim each line and drop blanks, so an empty text box saves as an empty list."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+    return value
+
+
+def _at_most(limit: int, what: str) -> AfterValidator:
+    def check(value: list[str] | None) -> list[str] | None:
+        if value is not None and len(value) > limit:
+            raise ValueError(f"At most {limit} {what}.")
+        return value
+
+    return AfterValidator(check)
+
+
+VenueImages = Annotated[
+    list[Annotated[str, Field(max_length=1024)]] | None,
+    BeforeValidator(_clean_list),
+    _at_most(8, "photos"),
+]
+VenueBenefits = Annotated[
+    list[Annotated[str, Field(max_length=120)]] | None,
+    BeforeValidator(_clean_list),
+    _at_most(12, "benefits"),
+]
+
+
 class VenueCreate(BaseModel):
     name: Annotated[str, Field(min_length=1, max_length=200)]
     address_line1: Annotated[str, Field(min_length=1, max_length=200)]
@@ -41,6 +78,9 @@ class VenueCreate(BaseModel):
     seating_capacity: Annotated[int | None, Field(default=None, ge=0)] = None
     directions: str | None = None
     map_url: Annotated[str | None, Field(default=None, max_length=512)] = None
+    description: Annotated[str | None, Field(default=None, max_length=4000)] = None
+    image_urls: VenueImages = None
+    benefits: VenueBenefits = None
 
 
 class VenueUpdate(BaseModel):
@@ -53,6 +93,9 @@ class VenueUpdate(BaseModel):
     seating_capacity: Annotated[int | None, Field(default=None, ge=0)] = None
     directions: str | None = None
     map_url: Annotated[str | None, Field(default=None, max_length=512)] = None
+    description: Annotated[str | None, Field(default=None, max_length=4000)] = None
+    image_urls: VenueImages = None
+    benefits: VenueBenefits = None
 
 
 class VenueOut(BaseModel):
@@ -68,6 +111,14 @@ class VenueOut(BaseModel):
     longitude: float | None = None
     map_url: str | None = None
     directions: str | None = None
+    description: str | None = None
+    image_urls: list[str] = Field(default_factory=list)
+    benefits: list[str] = Field(default_factory=list)
+
+    @field_validator("image_urls", "benefits", mode="before")
+    @classmethod
+    def _none_is_empty(cls, value: object) -> object:
+        return value if value is not None else []
 
     model_config = {"from_attributes": True}
 

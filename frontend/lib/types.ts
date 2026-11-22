@@ -31,6 +31,9 @@ export interface Venue {
   postal_code: string | null;
   directions: string | null;
   map_url: string | null;
+  description?: string | null;
+  image_urls?: string[];
+  benefits?: string[];
 }
 
 export interface TicketCategoryPublic {
@@ -214,6 +217,9 @@ export interface VenueFull {
   country_code: string;
   map_url: string | null;
   directions: string | null;
+  description: string | null;
+  image_urls: string[];
+  benefits: string[];
 }
 
 export interface CategoryAdmin {

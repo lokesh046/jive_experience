@@ -5,20 +5,21 @@ import { photoProblem, uploadPhoto } from "@/lib/upload";
 export const MAX_GALLERY = 10;
 const thumb = (u: string) => u.replace("/upload/", "/upload/f_auto,q_auto,c_fill,w_240,h_160/");
 
-/** Several photos for the event page slideshow: add many at once, reorder, remove. */
+/** Several photos: add many at once, reorder, remove. Used for the event slideshow and the venue photos. */
 export function GalleryField({
-  value, onChange, disabled,
-}: { value: string[]; onChange: (urls: string[]) => void; disabled?: boolean }) {
+  value, onChange, disabled, label = "Slideshow photos", max = MAX_GALLERY,
+  hint = "Choose several at once. They play after the banner photo, in this order.",
+}: { value: string[]; onChange: (urls: string[]) => void; disabled?: boolean; label?: string; max?: number; hint?: string }) {
   const id = useId();
   const [busy, setBusy] = useState(0);
   const [err, setErr] = useState<string | null>(null);
-  const room = MAX_GALLERY - value.length;
+  const room = max - value.length;
 
   async function add(files: FileList | null) {
     if (!files?.length) return;
     setErr(null);
     const chosen = [...files].slice(0, Math.max(0, room));
-    if (files.length > chosen.length) setErr(`Only ${MAX_GALLERY} photos fit in the slideshow.`);
+    if (files.length > chosen.length) setErr(`Only ${max} photos fit here.`);
     const problem = chosen.map(photoProblem).find(Boolean);
     if (problem) return setErr(problem);
     setBusy(chosen.length);
@@ -40,7 +41,7 @@ export function GalleryField({
 
   return (
     <div className="f wide">
-      <label htmlFor={id}>Slideshow photos</label>
+      <label htmlFor={id}>{label}</label>
       {value.length > 0 && (
         <ul className="gal-edit">
           {value.map((u, i) => (
@@ -61,7 +62,7 @@ export function GalleryField({
       <input id={id} type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={disabled || busy > 0 || room <= 0} onChange={(e) => { void add(e.target.files); e.target.value = ""; }} />
       {busy > 0 && <span className="hint" role="status">Uploading {busy} photo{busy > 1 ? "s" : ""}…</span>}
       {err && <span className="err" role="alert">{err}</span>}
-      {!err && <span className="hint">Choose several at once. They play after the banner photo, in this order. Up to {MAX_GALLERY}.</span>}
+      {!err && <span className="hint">{hint} Up to {max}.</span>}
     </div>
   );
 }

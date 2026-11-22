@@ -25,7 +25,6 @@ export function EventLocation({ venue, locationUrl }: { venue: Venue; locationUr
         </address>
         <a className="pill" href={open} target="_blank" rel="noopener noreferrer">Open in Maps</a>
       </div>
-      {venue.directions && <p className="loc-dir">{venue.directions}</p>}
     </section>
   );
 }

@@ -620,3 +620,19 @@ select option { background: #111; }
 .nav .search { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--mute); }
 .nav .search:hover { color: var(--fg); background: #2a2a2a; }
 .nav-end { display: flex; align-items: center; gap: 4px; }
+
+/* venue details */
+.venue { max-width: 1000px; margin: 0 auto; }
+.venue .prose { max-width: 680px; }
+.vphotos { list-style: none; display: grid; gap: 12px; margin-top: 36px; }
+.vphotos li { position: relative; border-radius: 20px; overflow: hidden; background: var(--surface); aspect-ratio: 4/3; }
+.vphotos li img { object-fit: cover; }
+.vphotos.n1 { grid-template-columns: 1fr; } .vphotos.n1 li { aspect-ratio: 16/9; }
+.vphotos.n2 { grid-template-columns: 1fr 1fr; }
+.vphotos.n3 { grid-template-columns: repeat(3, 1fr); }
+.vphotos:not(.n1):not(.n2):not(.n3) { grid-template-columns: repeat(3, 1fr); }
+.vbenefits { margin-top: 48px; max-width: 680px; }
+.vbenefits .inc { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 32px; font-size: 16px; line-height: 24px; }
+.vbenefits .inc li { padding-left: 26px; }
+.vbenefits .inc li::before { top: 8px; }
+@media (max-width: 640px) { .vphotos.n2, .vphotos.n3 { grid-template-columns: 1fr 1fr; } .vphotos li { aspect-ratio: 1; } .vphotos.n1 li { aspect-ratio: 4/3; } .vbenefits .inc { grid-template-columns: 1fr; } }
