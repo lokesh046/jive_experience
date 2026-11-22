@@ -54,6 +54,22 @@ export function BookingView({ reference }: { reference: string }) {
     return () => { live = false; };
   }, [reference, router]);
 
+  // Tickets are issued a moment after payment by a background worker: keep checking until they appear.
+  const waiting = !!b && (b.status === "CONFIRMED" || b.status === "PARTIALLY_REFUNDED") && tickets.length === 0;
+  const [tries, setTries] = useState(0);
+  useEffect(() => {
+    if (!waiting || tries >= 40) return;
+    const id = setTimeout(async () => {
+      try {
+        const t = await api<Ticket[] | { items: Ticket[] }>(`bookings/${reference}/tickets`);
+        const list = Array.isArray(t) ? t : t.items;
+        if (list.length) setTickets(list);
+      } catch {}
+      setTries((n) => n + 1);
+    }, 3000);
+    return () => clearTimeout(id);
+  }, [waiting, tries, reference]);
+
   async function ask() {
     setError(null);
     try { setQuote(await api<RefundQuote>(`bookings/${reference}/refund-quote`)); setAsking(true); }
@@ -102,7 +118,11 @@ export function BookingView({ reference }: { reference: string }) {
             {live && <p className="small" style={{ marginTop: 20 }}>Show the code at the gate. Each ticket works once, and a ticket that has been scanned cannot be shown again.</p>}
           </div>
         ) : live ? (
-          <div className="notice" style={{ marginTop: 36 }}><span>Your tickets are being prepared. This page will show them shortly: refresh in a moment.</span></div>
+          <div className="notice" style={{ marginTop: 36 }} role="status">
+            {tries < 40
+              ? <span>Your payment went through. We are preparing your tickets: they will appear here in a few seconds.</span>
+              : <span>Your payment went through, but the tickets are taking longer than usual. <button type="button" className="link" onClick={() => setTries(0)}>Check again</button>. If they still do not appear, contact us with booking {b.reference}.</span>}
+          </div>
         ) : null}
 
         {error && <p className="err" role="alert">{error}</p>}

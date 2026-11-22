@@ -52,6 +52,8 @@ export function ProfileMenu() {
             </div>
           )}
           {user && <Link role="menuitem" href="/profile" onClick={() => setOpen(false)}>Profile</Link>}
+          {user?.role === "ADMIN" && <Link role="menuitem" href="/admin" onClick={() => setOpen(false)}>Admin</Link>}
+          {(user?.role === "ADMIN" || user?.role === "EVENT_STAFF") && <Link role="menuitem" href="/scan" onClick={() => setOpen(false)}>Scan tickets</Link>}
           <Link role="menuitem" href="/tickets" onClick={() => setOpen(false)}>My tickets</Link>
           {user ? (
             <button role="menuitem" type="button" onClick={signOut}>Sign out</button>

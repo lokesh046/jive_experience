@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 async function HomeContent() {
   const events = await getEvents();
-  // The hero features the soonest featured night, or simply the soonest.
+  // The banner shows the soonest event an admin marked "Show in the homepage banner", or simply the soonest.
   const next = events.find((e) => e.is_featured) ?? events[0];
 
   const jsonLd = {
@@ -34,7 +34,7 @@ async function HomeContent() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
 
       <section className="hero" aria-label="Featured event">
-        <Photo src={next?.banner_image_url ?? site("hero")} alt="" sizes="100vw" priority />
+        <Photo src={next?.banner_image_url ?? next?.thumbnail_image_url ?? site("hero")} alt="" sizes="100vw" priority />
         <div className="wrap">
           <h1>{next ? next.title : "Live music evenings"}</h1>
           <p>
@@ -48,7 +48,7 @@ async function HomeContent() {
         </div>
       </section>
 
-      <Ticker />
+      <Ticker events={events} />
 
       <section className="block" id="events">
         <div className="wrap">

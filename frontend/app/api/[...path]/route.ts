@@ -45,15 +45,24 @@ function refreshTokens(refreshToken: string): Promise<TokenPair | null> {
   return p;
 }
 
+// The role is only used to decide which header links to show. It is not a
+// credential: every admin and scanner request is still checked by the API.
+const ROLE = "jive_role";
+function setRole(res: NextResponse, role: unknown, maxAge: number) {
+  if (typeof role === "string") res.cookies.set(ROLE, role, { httpOnly: false, sameSite: "lax", secure: IS_PROD, path: "/", maxAge });
+}
+
 function setSession(res: NextResponse, t: TokenPair) {
   const base = { httpOnly: true, sameSite: "lax" as const, secure: IS_PROD };
   res.cookies.set(ACCESS, t.access_token, { ...base, path: "/", maxAge: Math.max(60, t.expires_in) });
   res.cookies.set(REFRESH, t.refresh_token, { ...base, path: "/api", maxAge: REFRESH_DAYS * 86400 });
+  setRole(res, (t.user as { role?: string } | null)?.role, REFRESH_DAYS * 86400);
 }
 
 function clearSession(res: NextResponse) {
   res.cookies.set(ACCESS, "", { path: "/", maxAge: 0 });
   res.cookies.set(REFRESH, "", { path: "/api", maxAge: 0 });
+  res.cookies.set(ROLE, "", { path: "/", maxAge: 0 });
 }
 
 async function call(url: string, req: NextRequest, body: ArrayBuffer | undefined, token: string | undefined) {
@@ -128,7 +137,12 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
     return res;
   }
 
-  const res = passthrough(upstream, upstream.status === 204 ? null : await upstream.arrayBuffer());
+  const buf = upstream.status === 204 ? null : await upstream.arrayBuffer();
+  const res = passthrough(upstream, buf);
+  // Sessions that began before the role cookie existed get it from /auth/me.
+  if (joined === "auth/me" && upstream.ok && buf) {
+    try { setRole(res, (JSON.parse(new TextDecoder().decode(buf)) as { role?: string }).role, REFRESH_DAYS * 86400); } catch {}
+  }
   if (rotated) setSession(res, rotated);
   // The refresh token itself was rejected: the session is over.
   if (upstream.status === 401 && refresh && !rotated) clearSession(res);

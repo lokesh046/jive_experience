@@ -153,7 +153,7 @@ export interface UserProfile {
 
 export interface AuthUser {
   id: string;
-  role: "CUSTOMER" | "STAFF" | "ADMIN" | string;
+  role: "CUSTOMER" | "EVENT_STAFF" | "ADMIN";
   email: string;
   full_name: string | null;
   phone_e164: string | null;

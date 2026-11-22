@@ -101,7 +101,7 @@ export function EventEditor({ eventId }: { eventId?: string }) {
           <PhotoField label="Card thumbnail" value={f.thumbnail_image_url} onChange={(u) => setEdits((x) => ({ ...x, thumbnail_image_url: u }))} disabled={!editable} hint="Shown on the homepage and events list. Leave empty to reuse the banner." />
           <div className="f wide"><label htmlFor="d">Description</label><textarea id="d" value={f.description} onChange={set("description")} style={{ minHeight: 160 }} disabled={!editable} /><span className="hint">Separate paragraphs with a blank line.</span></div>
           <div className="f wide"><label htmlFor="tc">Terms for this event</label><textarea id="tc" value={f.terms_and_conditions} onChange={set("terms_and_conditions")} disabled={!editable} /></div>
-          <div className="f chk"><input id="ft" type="checkbox" checked={f.is_featured} onChange={set("is_featured")} disabled={!editable} /><label htmlFor="ft">Feature on the homepage</label></div>
+          <div className="f chk"><input id="ft" type="checkbox" checked={f.is_featured} onChange={set("is_featured")} disabled={!editable} /><label htmlFor="ft">Show in the homepage banner</label><span className="hint" style={{ marginLeft: 12 }}>Uses this event&apos;s banner photo, title and date. If several are ticked, the soonest shows.</span></div>
         </div>
         {note && <p className={note.ok ? "ok" : "err"} role={note.ok ? "status" : "alert"} style={note.ok ? { marginLeft: 0, marginTop: 20 } : undefined}>{note.text}</p>}
         {editable && <div className="ad-actions"><button className="pill" type="submit" disabled={busy}>{busy ? "Saving…" : eventId ? "Save changes" : "Create event"}</button></div>}

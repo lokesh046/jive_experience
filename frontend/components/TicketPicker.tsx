@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, rememberNext } from "@/lib/api-client";
 import { inr } from "@/lib/format";
+import { TicketPreview } from "@/components/TicketPreview";
 import type { Availability, Booking, TicketCategoryPublic } from "@/lib/types";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
   maxPerCustomer: number;
   onSale: boolean;
   saleMessage?: string;
+  preview: { when: string; title: string; venue: string };
 }
 
 const MESSAGES: Record<string, string> = {
@@ -25,7 +27,7 @@ const MESSAGES: Record<string, string> = {
   ABOVE_MAXIMUM: "That is more than the maximum for this ticket type.",
 };
 
-export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMessage }: Props) {
+export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMessage, preview }: Props) {
   const router = useRouter();
   const [cats, setCats] = useState(categories);
   const [qty, setQty] = useState<Record<string, number>>({});
@@ -113,7 +115,12 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
     return <p className="notice"><span>{saleMessage ?? "Tickets are not on sale right now."}</span></p>;
   }
 
+  const chosen = cats.filter((c) => (qty[c.id] ?? 0) > 0);
+  const ticketLabel = chosen.length === 0 ? null : chosen.length === 1 ? chosen[0].name : `${chosen.length} types`;
+
   return (
+    <>
+    <TicketPreview when={preview.when} title={preview.title} venue={preview.venue} ticket={ticketLabel} admit={count} total={count ? inr(total) : null} />
     <div className="cols">
       <div>
         {cats.map((c) => {
@@ -157,5 +164,6 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
         {error && <p className="err" role="alert">{error}</p>}
       </div>
     </div>
+    </>
   );
 }

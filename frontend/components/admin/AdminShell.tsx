@@ -17,7 +17,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       {(user) => (
         <div className="ad">
           <aside className="ad-side">
-            <Link className="logo" href="/admin">JIVE <span>admin</span></Link>
             <nav aria-label="Admin">
               {NAV.map((n) => <Link key={n.href} href={n.href} aria-current={n.match(path) ? "page" : undefined}>{n.label}</Link>)}
             </nav>
