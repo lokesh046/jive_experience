@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { AddToCalendar } from "@/components/AddToCalendar";
 import { EventLocation } from "@/components/EventLocation";
 import { Lineup } from "@/components/Lineup";
 import { VenueDetails } from "@/components/VenueDetails";
@@ -90,9 +91,10 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
             <time dateTime={e.starts_at}>{longDate(e.starts_at, e.timezone)}, {timeOf(e.starts_at, e.timezone)}</time>
           </p>
           <p className="small">{e.venue.name}, {e.venue.city}</p>
-          <p style={{ marginTop: 24 }}>
+          <div className="ev-actions">
             <Link className="pill" href="#tickets">{e.on_sale ? "Get tickets" : "See details"}</Link>
-          </p>
+            <AddToCalendar event={{ id: e.id, slug: e.slug, title: e.title, subtitle: e.subtitle, starts_at: e.starts_at, ends_at: e.ends_at, where: [e.venue.name, e.venue.address_line1, e.venue.city, e.venue.state, e.venue.postal_code].filter(Boolean).join(", "), url: `${SITE_URL}/events/${e.slug}` }} />
+          </div>
         </header>
 
         <EventGallery photos={photos} title={e.title} />

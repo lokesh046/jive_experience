@@ -2,7 +2,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AddToCalendar } from "@/components/AddToCalendar";
 import { ApiError, api, rememberNext } from "@/lib/api-client";
+import { SITE_URL } from "@/lib/config";
 import { eventsById } from "@/lib/events-index";
 import { inr, longDate, timeOf } from "@/lib/format";
 import { isPremiumType } from "@/lib/premium";
@@ -26,6 +28,7 @@ export function BookingView({ reference }: { reference: string }) {
   const [b, setB] = useState<Booking | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [event, setEvent] = useState<EventListItem | null>(null);
+  const [now, setNow] = useState(0);
   const [prices, setPrices] = useState<number[]>([]);
   const [quote, setQuote] = useState<RefundQuote | null>(null);
   const [asking, setAsking] = useState(false);
@@ -39,6 +42,7 @@ export function BookingView({ reference }: { reference: string }) {
         const booking = await api<Booking>(`bookings/${reference}`);
         if (!live) return;
         setB(booking);
+        setNow(Date.now());
         if (booking.status === "PENDING") { router.replace(`/checkout/${reference}`); return; }
         const [t, ev] = await Promise.all([
           api<Ticket[] | { items: Ticket[] }>(`bookings/${reference}/tickets`).catch(() => []),
@@ -101,6 +105,11 @@ export function BookingView({ reference }: { reference: string }) {
           <>
             <p style={{ margin: "12px 0 4px" }}>{longDate(event.starts_at, event.timezone)}, {timeOf(event.starts_at, event.timezone)}</p>
             <p className="small">{event.venue_name}, {event.city}</p>
+            {live && new Date(event.starts_at).getTime() > now && (
+              <p style={{ marginTop: 20 }}>
+                <AddToCalendar align="start" event={{ id: event.id, slug: event.slug, title: event.title, subtitle: event.subtitle, starts_at: event.starts_at, where: `${event.venue_name}, ${event.city}`, url: `${SITE_URL}/events/${event.slug}` }} />
+              </p>
+            )}
           </>
         )}
         <p className="small" style={{ marginTop: 20 }}>Booking <span style={{ color: "#fff" }}>{b.reference}</span> · {STATUS[b.status] ?? b.status} · {inr(b.total_paise)}</p>

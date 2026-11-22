@@ -636,3 +636,33 @@ select option { background: #111; }
 .vbenefits .inc li { padding-left: 26px; }
 .vbenefits .inc li::before { top: 8px; }
 @media (max-width: 640px) { .vphotos.n2, .vphotos.n3 { grid-template-columns: 1fr 1fr; } .vphotos li { aspect-ratio: 1; } .vphotos.n1 li { aspect-ratio: 4/3; } .vbenefits .inc { grid-template-columns: 1fr; } }
+
+/* sales dashboard */
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 28px; }
+.tiles > div { background: #0b0b0b; border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; gap: 6px; }
+.tiles span { font-size: 13px; color: var(--mute); }
+.tiles strong { font: 400 32px/1.1 var(--font-serif), serif; color: var(--fg); font-variant-numeric: tabular-nums; }
+.tiles small { font-size: 13px; line-height: 18px; color: var(--mute); }
+.chart { margin: 0; }
+.chart { overflow-x: auto; }
+.chart svg { width: 100%; min-width: 640px; height: auto; display: block; }
+.chart-data { margin-top: 12px; font-size: 14px; }
+.chart-data summary { cursor: pointer; color: var(--mute); }
+.chart-data table { margin-top: 12px; border-collapse: collapse; width: 100%; max-width: 480px; }
+.chart-data th, .chart-data td { text-align: left; padding: 8px 0; border-bottom: 1px solid var(--line); font-weight: 400; }
+.chart-data td { text-align: right; font-variant-numeric: tabular-nums; }
+.sales-row { grid-template-columns: 2.4fr 1.6fr 1fr 1fr 0.8fr; }
+.meter { display: inline-block; width: 56px; height: 4px; border-radius: 4px; background: #262626; vertical-align: middle; margin-left: 10px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: #fff; }
+@media (max-width: 900px) { .tiles { grid-template-columns: 1fr 1fr; } .sales-row { grid-template-columns: 1.6fr 1fr 1fr; } .sales-row > :nth-child(4), .sales-row > :nth-child(5) { display: none; } }
+
+/* add to calendar */
+.cal { position: relative; display: inline-block; }
+.cal summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; }
+.cal summary::-webkit-details-marker { display: none; }
+.cal-menu { position: absolute; z-index: 20; top: calc(100% + 8px); min-width: 280px; background: #141414; border: 1px solid var(--field); border-radius: 18px; padding: 8px; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6); }
+.cal.center .cal-menu { left: 50%; transform: translateX(-50%); }
+.cal.start .cal-menu { left: 0; }
+.cal-menu a { text-align: left; padding: 12px 16px; border-radius: 12px; font-size: 15px; color: var(--fg); }
+.cal-menu a:hover { background: #222; }
+.ev-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 24px; }

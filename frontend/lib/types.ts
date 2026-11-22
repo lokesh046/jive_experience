@@ -302,3 +302,15 @@ export interface StaffAssignment {
   full_name: string | null;
   email: string | null;
 }
+
+export interface SalesTotals {
+  gross_paise: number; refunded_paise: number; net_paise: number;
+  tickets_sold: number; bookings: number; cancelled_bookings: number; checked_in: number; capacity: number;
+}
+export interface SalesEventRow extends SalesTotals { event_id: string; title: string; slug: string; starts_at: string; status: EventStatus }
+export interface SalesDay { day: string; tickets: number; gross_paise: number }
+export interface SalesCategoryRow { name: string; price_paise: number; capacity: number; tickets_sold: number; gross_paise: number; is_active: boolean }
+export interface SalesReport {
+  summary: SalesTotals; events: SalesEventRow[]; daily: SalesDay[]; categories: SalesCategoryRow[];
+  days: number; timezone: string; generated_at: string;
+}

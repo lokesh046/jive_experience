@@ -5,6 +5,7 @@ import { RequireRole } from "@/components/RequireRole";
 
 const NAV = [
   { href: "/admin", label: "Events", match: (p: string) => p === "/admin" || p.startsWith("/admin/events") },
+  { href: "/admin/sales", label: "Sales", match: (p: string) => p.startsWith("/admin/sales") },
   { href: "/admin/bookings", label: "Bookings", match: (p: string) => p.startsWith("/admin/bookings") },
   { href: "/admin/venues", label: "Venues", match: (p: string) => p.startsWith("/admin/venues") },
   { href: "/admin/team", label: "Team", match: (p: string) => p.startsWith("/admin/team") },
