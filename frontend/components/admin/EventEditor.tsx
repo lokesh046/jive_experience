@@ -205,7 +205,7 @@ function Categories({ event, onChange }: { event: EventAdmin; onChange: () => vo
             <div className="f"><label htmlFor="cp">Price (₹)</label><input id="cp" type="number" min={0} step="0.01" value={c.price} onChange={(e) => setC({ ...c, price: e.target.value })} required /></div>
             <div className="f"><label htmlFor="cc">Capacity</label><input id="cc" type="number" min={0} value={c.capacity} onChange={(e) => setC({ ...c, capacity: e.target.value })} required /></div>
             <div className="f"><label htmlFor="cm">Most per booking</label><input id="cm" type="number" min={1} value={c.max} onChange={(e) => setC({ ...c, max: e.target.value })} required /></div>
-            <div className="f wide"><label htmlFor="cd">Description</label><input id="cd" value={c.description} onChange={(e) => setC({ ...c, description: e.target.value })} placeholder="Standing, full access to the main floor" /></div>
+            <div className="f wide"><label htmlFor="cd">What this ticket includes</label><textarea id="cd" value={c.description} onChange={(e) => setC({ ...c, description: e.target.value })} placeholder={"Standing, full access to the main floor\nOne welcome drink\nFast-track entry"} style={{ minHeight: 110 }} /><span className="hint">One item per line. Each line shows with a tick on the event page.</span></div>
             <div className="f chk"><input id="ca" type="checkbox" checked={c.active} onChange={(e) => setC({ ...c, active: e.target.checked })} /><label htmlFor="ca">On sale</label></div>
           </div>
           {err && <p className="err" role="alert">{err}</p>}

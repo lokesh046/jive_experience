@@ -27,23 +27,43 @@ const MESSAGES: Record<string, string> = {
   ABOVE_MAXIMUM: "That is more than the maximum for this ticket type.",
 };
 
+/** What a ticket type includes: one benefit per line in the admin's description. */
+function Includes({ text }: { text: string | null }) {
+  const lines = (text ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return null;
+  if (lines.length === 1) return <p className="inc-one">{lines[0]}</p>;
+  return <ul className="inc">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>;
+}
+
+const isOut = (c: TicketCategoryPublic) => c.is_sold_out || c.available <= 0;
+const capFor = (c: TicketCategoryPublic, maxPerCustomer: number) => Math.max(0, Math.min(c.max_per_booking, c.available, maxPerCustomer));
+
 export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMessage, preview }: Props) {
   const router = useRouter();
   const [cats, setCats] = useState(categories);
-  const [qty, setQty] = useState<Record<string, number>>({});
+  const [picked, setPicked] = useState<string | null>(null);
+  const [wanted, setWanted] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const keyRef = useRef<{ sig: string; key: string } | null>(null);
   const storeKey = `jive_sel_${slug}`;
+
+  // General is chosen to begin with; otherwise the first type that still has tickets.
+  const open = cats.filter((c) => !isOut(c));
+  const fallback = open.find((c) => /^general/i.test(c.name)) ?? open[0] ?? null;
+  const current = cats.find((c) => c.id === picked && !isOut(c)) ?? fallback;
+  const cap = current ? capFor(current, maxPerCustomer) : 0;
+  const floor = current ? Math.max(1, Math.min(current.min_per_booking, cap)) : 1;
+  const count = current ? Math.min(Math.max(wanted, floor), cap) : 0;
 
   // Restore a selection made before signing in.
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(storeKey);
       if (saved) {
-        const restored = JSON.parse(saved);
+        const r = JSON.parse(saved) as { cat?: string; count?: number };
         sessionStorage.removeItem(storeKey);
-        queueMicrotask(() => setQty(restored));
+        queueMicrotask(() => { if (r.cat) setPicked(r.cat); if (r.count) setWanted(r.count); });
       }
     } catch {}
   }, [storeKey]);
@@ -65,46 +85,31 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", tick); };
   }, [onSale, refresh]);
 
-  const total = cats.reduce((s, c) => s + (qty[c.id] ?? 0) * c.price_paise, 0);
-  const count = cats.reduce((s, c) => s + (qty[c.id] ?? 0), 0);
+  const total = current ? current.price_paise * count : 0;
 
-  function change(c: TicketCategoryPublic, d: number) {
+  function choose(c: TicketCategoryPublic) {
     setError(null);
-    setQty((q) => {
-      const cur = q[c.id] ?? 0;
-      const others = count - cur;
-      const cap = Math.max(0, Math.min(c.max_per_booking, c.available, maxPerCustomer - others));
-      const next = Math.max(0, Math.min(cap, cur + d));
-      return { ...q, [c.id]: next };
-    });
+    setPicked(c.id);
+    setWanted(1);
   }
 
   async function checkout() {
-    const items = cats.filter((c) => (qty[c.id] ?? 0) > 0).map((c) => ({ ticket_category_id: c.id, quantity: qty[c.id] }));
-    if (!items.length) return;
+    if (!current || count < 1) return;
+    const items = [{ ticket_category_id: current.id, quantity: count }];
     setBusy(true);
     setError(null);
     // Same selection → same key, so a double-click or retry cannot create two bookings.
     const sig = JSON.stringify(items);
     if (keyRef.current?.sig !== sig) keyRef.current = { sig, key: crypto.randomUUID() };
+    const remember = () => { try { sessionStorage.setItem(storeKey, JSON.stringify({ cat: current.id, count })); } catch {} };
     try {
       const b = await api<Booking>("bookings", { method: "POST", json: { event_slug: slug, items, idempotency_key: keyRef.current.key } });
       router.push(`/checkout/${b.reference}`);
     } catch (e) {
       setBusy(false);
       if (e instanceof ApiError) {
-        if (e.status === 401) {
-          try { sessionStorage.setItem(storeKey, JSON.stringify(qty)); } catch {}
-          rememberNext(`/events/${slug}#tickets`);
-          router.push("/signin");
-          return;
-        }
-        if (e.code === "PHONE_NUMBER_REQUIRED") {
-          try { sessionStorage.setItem(storeKey, JSON.stringify(qty)); } catch {}
-          rememberNext(`/events/${slug}#tickets`);
-          router.push("/phone");
-          return;
-        }
+        if (e.status === 401) { remember(); rememberNext(`/events/${slug}#tickets`); router.push("/signin"); return; }
+        if (e.code === "PHONE_NUMBER_REQUIRED") { remember(); rememberNext(`/events/${slug}#tickets`); router.push("/phone"); return; }
         if (e.code === "INSUFFICIENT_INVENTORY") void refresh();
         setError(MESSAGES[e.code] ?? e.message);
       } else setError("Something went wrong. Please try again.");
@@ -115,55 +120,66 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
     return <p className="notice"><span>{saleMessage ?? "Tickets are not on sale right now."}</span></p>;
   }
 
-  const chosen = cats.filter((c) => (qty[c.id] ?? 0) > 0);
-  const ticketLabel = chosen.length === 0 ? null : chosen.length === 1 ? chosen[0].name : `${chosen.length} types`;
-
   return (
     <>
-    <TicketPreview when={preview.when} title={preview.title} venue={preview.venue} ticket={ticketLabel} admit={count} total={count ? inr(total) : null} />
-    <div className="cols">
-      <div>
+      <TicketPreview when={preview.when} title={preview.title} venue={preview.venue} ticket={current?.name ?? null} admit={count} total={count ? inr(total) : null} />
+
+      <h3 className="step">1. Choose a ticket type</h3>
+      <div className="types" role="radiogroup" aria-label="Ticket type">
         {cats.map((c) => {
-          const q = qty[c.id] ?? 0;
-          const out = c.is_sold_out || c.available <= 0;
-          const others = count - q;
-          const cap = Math.max(0, Math.min(c.max_per_booking, c.available, maxPerCustomer - others));
+          const out = isOut(c);
+          const on = current?.id === c.id;
           return (
-            <div className={`tier${out ? " out" : ""}`} key={c.id}>
-              <div>
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              disabled={out}
+              className={`type${on ? " on" : ""}${out ? " out" : ""}`}
+              onClick={() => choose(c)}
+            >
+              <span className="type-top">
                 <b>{c.name}</b>
-                {c.description && <small>{c.description}{!out && c.available <= 10 ? ` · ${c.available} left` : ""}</small>}
-                {!c.description && !out && c.available <= 10 && <small>{c.available} left</small>}
-                <span className="pr">{inr(c.price_paise)}</span>
-              </div>
-              {out ? (
-                <small>Sold out</small>
-              ) : (
-                <div className="qty" role="group" aria-label={`${c.name} quantity`}>
-                  <button type="button" aria-label={`Fewer ${c.name}`} disabled={q === 0} onClick={() => change(c, -1)}>−</button>
-                  <output aria-live="polite">{q}</output>
-                  <button type="button" aria-label={`More ${c.name}`} disabled={q >= cap} onClick={() => change(c, 1)}>+</button>
-                </div>
-              )}
-            </div>
+                <span className="mark" aria-hidden="true" />
+              </span>
+              <span className="type-price">{inr(c.price_paise)}<small> per ticket</small></span>
+              <Includes text={c.description} />
+              <span className="type-note">{out ? "Sold out" : c.available <= 10 ? `Only ${c.available} left` : ""}</span>
+            </button>
           );
         })}
-        <p className="small" style={{ marginTop: 16 }}>Maximum {maxPerCustomer} tickets per person.</p>
       </div>
-      <div className="sum">
-        <div className="rows">
-          {cats.filter((c) => (qty[c.id] ?? 0) > 0).map((c) => (
-            <div key={c.id}><span className="name">{c.name} × {qty[c.id]}</span><span>{inr(c.price_paise * (qty[c.id] ?? 0))}</span></div>
-          ))}
-          {count === 0 && <div><span>No tickets selected</span><span /></div>}
+
+      <div className="cols">
+        <div>
+          <h3 className="step">2. How many?</h3>
+          {current ? (
+            <div className="how">
+              <div className="qty" role="group" aria-label={`${current.name} quantity`}>
+                <button type="button" aria-label="Fewer tickets" disabled={count <= floor} onClick={() => setWanted(count - 1)}>−</button>
+                <output aria-live="polite">{count}</output>
+                <button type="button" aria-label="More tickets" disabled={count >= cap} onClick={() => setWanted(count + 1)}>+</button>
+              </div>
+              <p className="small">{current.name} · {inr(current.price_paise)} each. Maximum {Math.min(cap, maxPerCustomer)} per booking.</p>
+            </div>
+          ) : (
+            <p className="small">Every ticket type is sold out.</p>
+          )}
         </div>
-        <div className="total"><span className="small">Total</span><strong>{inr(total)}</strong></div>
-        <button className="pill full" type="button" disabled={count === 0 || busy} onClick={checkout}>
-          {busy ? "Reserving…" : "Continue to checkout"}
-        </button>
-        {error && <p className="err" role="alert">{error}</p>}
+        <div className="sum">
+          <div className="rows">
+            {current && count > 0
+              ? <div><span className="name">{current.name} × {count}</span><span>{inr(total)}</span></div>
+              : <div><span>No tickets selected</span><span /></div>}
+          </div>
+          <div className="total"><span className="small">Total</span><strong>{inr(total)}</strong></div>
+          <button className="pill full" type="button" disabled={!current || count < 1 || busy} onClick={checkout}>
+            {busy ? "Reserving…" : "Continue to checkout"}
+          </button>
+          {error && <p className="err" role="alert">{error}</p>}
+        </div>
       </div>
-    </div>
     </>
   );
 }
