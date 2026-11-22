@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, func, select, update
+from sqlalchemy import CursorResult, String, exists, func, select, update
+from sqlalchemy import cast as sql_cast
 
 from app.core.pagination import PageParams
 from app.models.commerce import (
@@ -29,7 +30,8 @@ from app.models.commerce import (
     ReservationStatus,
     TicketReservation,
 )
-from app.models.event import TicketCategory
+from app.models.event import Event, EventStatus, TicketCategory
+from app.models.fulfilment import OutboxMessage
 from app.repositories.base import BaseRepository
 
 
@@ -203,6 +205,37 @@ class BookingRepository(BaseRepository[Booking]):
 
     async def reference_taken(self, reference: str) -> bool:
         return await self.exists(Booking.reference == reference)
+
+    async def due_for_reminder(
+        self, *, now: datetime, horizon: timedelta, limit: int = 500
+    ) -> Sequence[uuid.UUID]:
+        """Confirmed bookings whose event starts within `horizon` and which have
+        not been queued for a reminder yet.
+
+        A booking made inside the window is skipped: someone who bought a
+        ticket this morning does not need a "tomorrow" email. Bookings already
+        queued are excluded in SQL, not just de-duplicated on insert, so a
+        large backlog cannot keep re-selecting the same first rows.
+        """
+        already = exists().where(
+            OutboxMessage.dedup_key
+            == func.concat("booking.reminder:", sql_cast(Booking.id, String))
+        )
+        statement = (
+            select(Booking.id)
+            .join(Event, Event.id == Booking.event_id)
+            .where(
+                Booking.status == BookingStatus.CONFIRMED,
+                Event.status == EventStatus.PUBLISHED,
+                Event.starts_at > now,
+                Event.starts_at <= now + horizon,
+                Booking.confirmed_at < Event.starts_at - horizon,
+                ~already,
+            )
+            .order_by(Event.starts_at.asc())
+            .limit(limit)
+        )
+        return (await self.session.execute(statement)).scalars().all()
 
     async def purchased_quantity(self, user_id: uuid.UUID, event_id: uuid.UUID) -> int:
         """Tickets already bought by this customer for this event.

@@ -124,6 +124,10 @@ class Settings(BaseSettings):
     # Where customers open their booking from an email.
     public_site_url: str = "http://localhost:3000"
 
+    # Reminder email to ticket holders this many hours before the event starts.
+    reminder_hours_before: Annotated[int, Field(ge=1, le=168)] = 24
+    reminder_sweep_interval_seconds: float = 900.0
+
     # --------------------------------------------------------- worker ----
     worker_poll_interval_seconds: float = 2.0
     worker_batch_size: int = 20

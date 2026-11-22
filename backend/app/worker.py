@@ -26,6 +26,7 @@ import asyncio
 import contextlib
 import signal
 import socket
+import time
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
@@ -48,6 +49,7 @@ from app.services.notification import NotificationService
 from app.services.outbox import (
     TOPIC_BOOKING_CANCELLED,
     TOPIC_BOOKING_CONFIRMED,
+    TOPIC_BOOKING_REMINDER,
     TOPIC_EVENT_CANCELLED,
     TOPIC_PAYMENT_CAPTURED,
     TOPIC_REFUND_COMPLETED,
@@ -158,6 +160,11 @@ async def handle_event_cancelled(session: AsyncSession, payload: dict[str, Any])
         await session.commit()
 
 
+async def handle_booking_reminder(session: AsyncSession, payload: dict[str, Any]) -> None:
+    sent = await _notifications(session).send_reminder(uuid.UUID(payload["booking_id"]))
+    logger.info("reminder_email_handled", booking_id=payload["booking_id"], sent=sent)
+
+
 def _notifications(session: AsyncSession) -> NotificationService:
     settings = get_settings()
     return NotificationService(session, settings, TicketService(session, OutboxService(session)))
@@ -180,6 +187,7 @@ HANDLERS: dict[str, Handler] = {
     TOPIC_REFUND_PROCESS: handle_refund_process,
     TOPIC_EVENT_CANCELLED: handle_event_cancelled,
     TOPIC_BOOKING_CANCELLED: handle_booking_cancelled,
+    TOPIC_BOOKING_REMINDER: handle_booking_reminder,
     TOPIC_REFUND_COMPLETED: handle_refund_completed,
 }
 
@@ -192,6 +200,7 @@ class Worker:
         self.settings = settings
         self.worker_id = f"{socket.gethostname()}:{uuid.uuid4().hex[:8]}"
         self._stopping = asyncio.Event()
+        self._last_reminder_sweep = 0.0
 
     def request_stop(self) -> None:
         """Finish the message in hand, then exit."""
@@ -315,7 +324,18 @@ class Worker:
             await session.commit()
             logger.info("outbox_stale_locks_released", count=recovered)
 
-        # 4. Payments and refunds the provider never finished telling us
+        # 4. Reminders for events starting soon. Cheap, but not needed every
+        #    few seconds, so it runs on its own slower clock.
+        if settings.email_configured and (
+            time.monotonic() - self._last_reminder_sweep >= settings.reminder_sweep_interval_seconds
+        ):
+            self._last_reminder_sweep = time.monotonic()
+            notifications = NotificationService(session, settings, TicketService(session, outbox))
+            queued = await notifications.enqueue_due_reminders(datetime.now(UTC))
+            if queued:
+                logger.info("reminders_queued", count=queued)
+
+        # 5. Payments and refunds the provider never finished telling us
         #    about. Skipped while no provider is configured.
         if settings.payment_provider:
             provider = get_payment_provider(settings.payment_provider)

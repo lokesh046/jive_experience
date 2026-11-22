@@ -6,6 +6,7 @@ import asyncio
 import io
 import re
 import uuid
+from datetime import datetime, timedelta
 from html import escape
 from zoneinfo import ZoneInfo
 
@@ -19,13 +20,15 @@ from app.core.config import Settings
 from app.core.errors import NotFoundError
 from app.core.mailer import InlineImage, Mail
 from app.core.money import format_inr
-from app.models.commerce import Booking
+from app.models.commerce import Booking, BookingStatus
 from app.models.event import Event, EventStatus
+from app.models.fulfilment import TicketStatus
 from app.models.user import User
 from app.repositories.catalogue import EventRepository
 from app.repositories.commerce import BookingRepository, RefundRepository
 from app.repositories.fulfilment import TicketRepository
 from app.repositories.user import UserRepository
+from app.services.outbox import TOPIC_BOOKING_REMINDER
 from app.services.ticket import TicketService
 
 logger = structlog.get_logger(__name__)
@@ -64,8 +67,34 @@ class NotificationService:
 
     async def send_tickets(self, booking_id: uuid.UUID) -> bool:
         """Email the tickets for a booking. Returns False when email is off."""
+        return await self._send_ticket_mail(booking_id, reminder=False)
+
+    async def send_reminder(self, booking_id: uuid.UUID) -> bool:
+        """Remind a customer the event is coming up, with their tickets again.
+
+        Sent only if the booking is still confirmed and still has live tickets:
+        a booking cancelled after the reminder was queued gets nothing.
+        """
+        return await self._send_ticket_mail(booking_id, reminder=True)
+
+    async def enqueue_due_reminders(self, now: datetime) -> int:
+        """Queue a reminder for every booking now inside the reminder window."""
+        horizon = timedelta(hours=self.settings.reminder_hours_before)
+        due = await self.bookings.due_for_reminder(now=now, horizon=horizon)
+        for booking_id in due:
+            await self.tickets.outbox.enqueue(
+                topic=TOPIC_BOOKING_REMINDER,
+                payload={"booking_id": str(booking_id)},
+                dedup_key=f"booking.reminder:{booking_id}",
+            )
+        if due:
+            await self.session.commit()
+        return len(due)
+
+    async def _send_ticket_mail(self, booking_id: uuid.UUID, *, reminder: bool) -> bool:
+        kind = "reminder" if reminder else "tickets"
         if not self.settings.email_configured:
-            logger.warning("email_not_configured_skipping_tickets", booking_id=str(booking_id))
+            logger.warning(f"email_not_configured_skipping_{kind}", booking_id=str(booking_id))
             return False
 
         booking = await self.bookings.get(booking_id)
@@ -75,7 +104,11 @@ class NotificationService:
         event = await self.events.get(booking.event_id)
         if user is None or event is None:
             raise NotFoundError("Booking details not found.", code="BOOKING_NOT_FOUND")
-        rows = await self.ticket_rows.for_booking(booking.id)
+        rows = list(await self.ticket_rows.for_booking(booking.id))
+        if reminder:
+            if booking.status is not BookingStatus.CONFIRMED:
+                return False
+            rows = [row for row in rows if row.status is TicketStatus.ISSUED]
         if not rows:
             return False
 
@@ -133,23 +166,37 @@ class NotificationService:
         body_style = (
             "font:16px/1.5 -apple-system,Segoe UI,sans-serif;color:#111;max-width:520px;margin:auto"
         )
+        if reminder:
+            lead_text = f"{event.title} is coming up soon."
+            lead_html = f"<b>{escape(event.title)}</b> is coming up soon."
+            subject = f"Reminder: {event.title} is on {when}"
+        else:
+            lead_text = f"you are going to {event.title}."
+            lead_html = f"you are going to <b>{escape(event.title)}</b>."
+            subject = f"Your tickets for {event.title}"
+        directions = (
+            f'<p><a href="{escape(event.venue.map_url)}">Get directions</a></p>'
+            if event.venue.map_url
+            else ""
+        )
         html = (
             f'<div style="{body_style}">'
-            f"<p>Hi {escape(name)}, you are going to <b>{escape(event.title)}</b>.</p>"
+            f"<p>Hi {escape(name)}, {lead_html}</p>"
             f"<p>{escape(when)}<br>{escape(venue)}<br>"
             f"Booking <b>{escape(booking.reference)}</b></p>"
             f"{''.join(blocks)}"
             "<p>Show each code at the gate. Every ticket works once.</p>"
+            f"{directions}"
             f'<p><a href="{escape(link)}">Open your booking</a></p></div>'
         )
         text = (
-            f"Hi {name}, you are going to {event.title}.\n{when}\n{venue}\n"
+            f"Hi {name}, {lead_text}\n{when}\n{venue}\n"
             f"Booking {booking.reference}\n\n" + "\n".join(lines) + "\n\n"
             f"Your QR codes are in the HTML version of this email, and always at:\n{link}\n"
         )
         mail = Mail(
             to=user.email,
-            subject=f"Your tickets for {event.title}",
+            subject=subject,
             text=text,
             html=html,
             images=images,
