@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
 
 from app.models.event import EventCategory, EventStatus
 
@@ -163,6 +163,7 @@ class EventCreate(BaseModel):
     requires_attendee_name: bool = False
     cancellation_policy: dict[str, Any] | None = None
     terms_and_conditions: str | None = None
+    location_url: LocationUrl = None
     is_featured: bool = False
 
     @field_validator("slug")
@@ -202,6 +203,7 @@ class EventUpdate(BaseModel):
     requires_attendee_name: bool | None = None
     cancellation_policy: dict[str, Any] | None = None
     terms_and_conditions: str | None = None
+    location_url: LocationUrl = None
     is_featured: bool | None = None
 
     @field_validator("slug")
@@ -238,6 +240,23 @@ class EventListItem(BaseModel):
     starting_price_paise: int | None = None
     is_featured: bool
     is_sold_out: bool
+
+
+def _web_link(value: object) -> object:
+    """http(s) links only, so `javascript:` and the like are never stored or put in an href."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if len(text) > 1024:
+        raise ValueError("That link is too long.")
+    if not re.match(r"^https?://\S+$", text, re.IGNORECASE):
+        raise ValueError("Enter a full web link starting with https://")
+    return text
+
+
+LocationUrl = Annotated[str | None, BeforeValidator(_web_link)]
 
 
 class PerformerIn(BaseModel):
@@ -304,6 +323,7 @@ class EventDetail(BaseModel):
     requires_attendee_name: bool
     cancellation_policy: dict[str, Any] | None = None
     terms_and_conditions: str | None = None
+    location_url: str | None = None
     is_sold_out: bool
 
 
@@ -328,6 +348,7 @@ class EventAdminDetail(BaseModel):
     requires_attendee_name: bool
     cancellation_policy: dict[str, Any] | None = None
     terms_and_conditions: str | None = None
+    location_url: str | None = None
     is_featured: bool
     published_at: datetime | None = None
     cancelled_at: datetime | None = None

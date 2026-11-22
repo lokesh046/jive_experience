@@ -106,3 +106,29 @@ async def test_lineup_input_is_validated(
         json={"performers": []},
     )
     assert missing.status_code == 404
+
+
+async def test_event_location_link_is_stored_shown_and_must_be_a_web_link(
+    api: AsyncClient, db_session: AsyncSession, google: StubGoogleClient
+) -> None:
+    event, _ = await make_event(db_session)
+    await db_session.commit()
+    admin = await sign_in_as(api, google, await seed_admin(db_session))
+    url = f"/api/v1/admin/events/{event.id}"
+
+    assert (await api.get(f"/api/v1/events/{event.slug}")).json()["location_url"] is None
+
+    ok = await api.patch(
+        url, headers=bearer(admin), json={"location_url": "  https://maps.app.goo.gl/abc123  "}
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["location_url"] == "https://maps.app.goo.gl/abc123"
+    shown = (await api.get(f"/api/v1/events/{event.slug}")).json()
+    assert shown["location_url"] == "https://maps.app.goo.gl/abc123"
+
+    for bad in ("javascript:alert(1)", "maps.google.com/x", "ftp://example.com/x", "https://a b"):
+        refused = await api.patch(url, headers=bearer(admin), json={"location_url": bad})
+        assert refused.status_code == 422, bad
+
+    cleared = await api.patch(url, headers=bearer(admin), json={"location_url": "   "})
+    assert cleared.status_code == 200 and cleared.json()["location_url"] is None

@@ -25,6 +25,9 @@ export interface Venue {
   city: string;
   state: string | null;
   address_line1?: string | null;
+  address_line2?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   postal_code: string | null;
   directions: string | null;
   map_url: string | null;
@@ -73,6 +76,7 @@ export interface EventDetail {
   requires_attendee_name: boolean;
   cancellation_policy: Record<string, unknown> | null;
   terms_and_conditions: string | null;
+  location_url: string | null;
   is_sold_out: boolean;
 }
 
@@ -250,6 +254,7 @@ export interface EventAdmin {
   max_tickets_per_customer: number;
   requires_attendee_name: boolean;
   terms_and_conditions: string | null;
+  location_url: string | null;
   is_featured: boolean;
   published_at: string | null;
   cancelled_at: string | null;

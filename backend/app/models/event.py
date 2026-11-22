@@ -120,6 +120,8 @@ class Event(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # numbers are a client decision — see docs/open-decisions.md.
     cancellation_policy: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     terms_and_conditions: Mapped[str | None] = mapped_column(Text)
+    # A map link for this event (e.g. a Google Maps share link). Falls back to the venue's own.
+    location_url: Mapped[str | None] = mapped_column(String(1024))
 
     is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 

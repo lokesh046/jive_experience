@@ -14,7 +14,7 @@ const blank = {
   title: "", slug: "", subtitle: "", description: "", category: "CONCERT", venue_id: "",
   starts_at: "", ends_at: "", sale_starts_at: "", sale_ends_at: "",
   banner_image_url: "", thumbnail_image_url: "", gallery: [] as string[], max_tickets_per_customer: "4",
-  requires_attendee_name: false, terms_and_conditions: "", is_featured: false,
+  requires_attendee_name: false, terms_and_conditions: "", location_url: "", is_featured: false,
 };
 type Form = typeof blank;
 
@@ -35,7 +35,7 @@ export function EventEditor({ eventId }: { eventId?: string }) {
         starts_at: toIst(e0.starts_at), ends_at: toIst(e0.ends_at), sale_starts_at: toIst(e0.sale_starts_at), sale_ends_at: toIst(e0.sale_ends_at),
         banner_image_url: e0.banner_image_url ?? "", thumbnail_image_url: e0.thumbnail_image_url ?? "", gallery: e0.gallery_image_urls ?? [],
         max_tickets_per_customer: String(e0.max_tickets_per_customer), requires_attendee_name: e0.requires_attendee_name,
-        terms_and_conditions: e0.terms_and_conditions ?? "", is_featured: e0.is_featured,
+        terms_and_conditions: e0.terms_and_conditions ?? "", location_url: e0.location_url ?? "", is_featured: e0.is_featured,
       }
     : blank;
   const f: Form = { ...base, ...edits };
@@ -52,7 +52,7 @@ export function EventEditor({ eventId }: { eventId?: string }) {
       starts_at: fromIst(f.starts_at), ends_at: fromIst(f.ends_at), sale_starts_at: fromIst(f.sale_starts_at), sale_ends_at: fromIst(f.sale_ends_at),
       banner_image_url: nul(f.banner_image_url), thumbnail_image_url: nul(f.thumbnail_image_url), gallery_image_urls: f.gallery,
       max_tickets_per_customer: Number(f.max_tickets_per_customer), requires_attendee_name: f.requires_attendee_name,
-      terms_and_conditions: nul(f.terms_and_conditions), is_featured: f.is_featured,
+      terms_and_conditions: nul(f.terms_and_conditions), location_url: nul(f.location_url), is_featured: f.is_featured,
     };
     try {
       if (!eventId) {
@@ -93,6 +93,8 @@ export function EventEditor({ eventId }: { eventId?: string }) {
             </select>
             {venues.data && venues.data.items.length === 0 && <span className="hint">No venues yet. <Link className="link" href="/admin/venues">Add one</Link>.</span>}
           </div>
+          <div className="f wide"><label htmlFor="loc">Location link</label><input id="loc" type="url" value={f.location_url} onChange={set("location_url")} placeholder="https://maps.app.goo.gl/… or https://www.google.com/maps/…" disabled={!editable} />
+            <span className="hint">Paste the Google Maps share link for this event. The event page shows a map after the tickets and a button that opens this link. Leave empty to use the venue&apos;s own map link or its address.</span></div>
           <div className="f"><label htmlFor="st">Starts (India time)</label><input id="st" type="datetime-local" value={f.starts_at} onChange={set("starts_at")} required disabled={!editable} /></div>
           <div className="f"><label htmlFor="en">Ends (India time)</label><input id="en" type="datetime-local" value={f.ends_at} onChange={set("ends_at")} disabled={!editable} /></div>
           <div className="f"><label htmlFor="ss">Sales open</label><input id="ss" type="datetime-local" value={f.sale_starts_at} onChange={set("sale_starts_at")} disabled={!editable} /></div>

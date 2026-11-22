@@ -722,5 +722,6 @@ class CatalogueService:
             "requires_attendee_name": event.requires_attendee_name,
             "cancellation_policy": event.cancellation_policy,
             "terms_and_conditions": event.terms_and_conditions,
+            "location_url": event.location_url,
             "is_sold_out": cls._is_sold_out(event),
         }

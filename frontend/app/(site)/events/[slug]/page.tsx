@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { EventLocation } from "@/components/EventLocation";
 import { Lineup } from "@/components/Lineup";
 import { EventGallery } from "@/components/EventGallery";
 import { TicketPicker } from "@/components/TicketPicker";
@@ -117,6 +118,8 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
           </p>
           <TicketPicker slug={e.slug} categories={e.ticket_categories} maxPerCustomer={e.max_tickets_per_customer} onSale={e.on_sale} saleMessage={saleMessage} preview={{ when: `${longDate(e.starts_at, e.timezone)} · ${timeOf(e.starts_at, e.timezone)}`, title: e.title, venue: `${e.venue.name}, ${e.venue.city}`, year: String(new Date(e.starts_at).getFullYear()) }} />
         </section>
+
+        <EventLocation venue={e.venue} locationUrl={e.location_url} />
 
         {e.terms_and_conditions && (
           <div className="prose">
