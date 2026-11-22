@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 import sqlalchemy as sa
 from httpx import AsyncClient
@@ -200,3 +202,80 @@ async def test_a_past_event_is_listed_as_past_and_is_not_on_sale(
     assert gone_slug in [e["slug"] for e in past_list]
     assert gone_slug not in [e["slug"] for e in upcoming_list]
     assert ahead_slug in [e["slug"] for e in upcoming_list]
+
+
+async def test_duplicating_an_event_copies_content_but_not_sales_or_status(
+    api: AsyncClient, db_session: AsyncSession, google: StubGoogleClient
+) -> None:
+    event, category = await make_event(db_session)
+    event_id = event.id
+    await db_session.execute(
+        sa.text(
+            "UPDATE events SET is_featured = true, "
+            "location_url = 'https://maps.app.goo.gl/x' WHERE id = :i"
+        ),
+        {"i": event_id},
+    )
+    await db_session.execute(
+        sa.text("UPDATE ticket_categories SET sold_count = 7, reserved_count = 2 WHERE id = :i"),
+        {"i": category.id},
+    )
+    await db_session.commit()
+    db_session.expire_all()
+    admin = await sign_in_as(api, google, await seed_admin(db_session))
+
+    await api.put(
+        f"/api/v1/admin/events/{event_id}/lineup",
+        headers=bearer(admin),
+        json={"performers": [{"name": "Kohra", "performs_at": "2027-01-10T15:30:00+00:00"}]},
+    )
+    url = f"/api/v1/admin/events/{event_id}/duplicate"
+    first = await api.post(url, headers=bearer(admin), json={})
+    assert first.status_code == 201, first.text
+    copy = first.json()
+
+    assert copy["id"] != str(event_id)
+    assert copy["title"].endswith("(copy)") and copy["status"] == "DRAFT"
+    assert copy["is_featured"] is False and copy["published_at"] is None
+    assert copy["location_url"] == "https://maps.app.goo.gl/x"
+    assert [c["name"] for c in copy["ticket_categories"]] == ["General"]
+    cat = copy["ticket_categories"][0]
+    assert cat["price_paise"] == 100000 and cat["sold_count"] == 0 and cat["reserved_count"] == 0
+    # The lineup comes along, its set time moved by the same week as the event.
+    assert [p["name"] for p in copy["performers"]] == ["Kohra"]
+    assert datetime.fromisoformat(copy["performers"][0]["performs_at"]) == datetime(
+        2027, 1, 17, 15, 30, tzinfo=UTC
+    )
+
+    # A second copy gets its own URL.
+    second = (await api.post(url, headers=bearer(admin), json={})).json()
+    assert second["slug"] != copy["slug"]
+
+    # An explicit date is used as given.
+    dated = (
+        await api.post(url, headers=bearer(admin), json={"starts_at": "2030-05-01T18:00:00+05:30"})
+    ).json()
+    assert datetime.fromisoformat(dated["starts_at"]) == datetime(2030, 5, 1, 12, 30, tzinfo=UTC)
+
+    # Nothing about the copy is public, and the original is untouched.
+    assert (await api.get(f"/api/v1/events/{copy['slug']}")).status_code == 404
+    original = (await api.get(f"/api/v1/admin/events/{event_id}", headers=bearer(admin))).json()
+    assert original["status"] == "PUBLISHED" and original["is_featured"] is True
+
+
+async def test_only_an_admin_can_duplicate_an_event(
+    api: AsyncClient, db_session: AsyncSession, google: StubGoogleClient
+) -> None:
+    event, _ = await make_event(db_session)
+    await db_session.commit()
+    url = f"/api/v1/admin/events/{event.id}/duplicate"
+    assert (await api.post(url, json={})).status_code == 401
+    customer = await customer_session(api, google)
+    assert (await api.post(url, headers=bearer(customer["access"]), json={})).status_code == 403
+    admin = await sign_in_as(api, google, await seed_admin(db_session))
+    missing = await api.post(
+        "/api/v1/admin/events/00000000-0000-0000-0000-000000000000/duplicate",
+        headers=bearer(admin),
+        json={},
+    )
+    assert missing.status_code == 404

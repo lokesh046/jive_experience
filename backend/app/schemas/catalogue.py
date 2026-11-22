@@ -233,6 +233,12 @@ class EventCreate(BaseModel):
         return self
 
 
+class EventDuplicate(BaseModel):
+    """Copy an event as a new draft. Without a date it is set one week after the original."""
+
+    starts_at: datetime | None = None
+
+
 class EventUpdate(BaseModel):
     title: Annotated[str | None, Field(default=None, min_length=1, max_length=200)] = None
     slug: Annotated[str | None, Field(default=None, max_length=160)] = None

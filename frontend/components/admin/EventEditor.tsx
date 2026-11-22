@@ -121,6 +121,7 @@ export function EventEditor({ eventId }: { eventId?: string }) {
 }
 
 function StatusActions({ event, onChange }: { event: EventAdmin; onChange: () => void }) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState("");
@@ -133,6 +134,13 @@ function StatusActions({ event, onChange }: { event: EventAdmin; onChange: () =>
     catch (e) { setErr(msgOf(e)); }
     finally { setBusy(false); }
   }
+  async function duplicate() {
+    setBusy(true); setErr(null);
+    try {
+      const copy = await api<EventAdmin>(`admin/events/${event.id}/duplicate`, { method: "POST", json: {} });
+      router.push(`/admin/events/${copy.id}`);
+    } catch (e) { setErr(msgOf(e)); setBusy(false); }
+  }
   const live = event.status === "PUBLISHED" || event.status === "SOLD_OUT";
   return (
     <div style={{ marginBottom: 32 }}>
@@ -140,6 +148,7 @@ function StatusActions({ event, onChange }: { event: EventAdmin; onChange: () =>
         {event.status === "DRAFT" && <button className="pill" type="button" disabled={busy} onClick={() => run("publish")}>Publish</button>}
         {live && <button className="pill ghost" type="button" disabled={busy} onClick={() => run("unpublish")}>Unpublish</button>}
         {event.status !== "CANCELLED" && event.status !== "COMPLETED" && !asking && <button className="pill danger" type="button" onClick={() => setAsking(true)}>Cancel event</button>}
+        <button className="pill ghost" type="button" disabled={busy} onClick={duplicate} title="A new draft with the same details, ticket types and lineup">Duplicate</button>
         {event.status === "PUBLISHED" && <Link className="link" href={`/events/${event.slug}`} target="_blank">View public page</Link>}
       </div>
       {event.status === "CANCELLED" && <p className="notice"><span>Cancelled{event.cancellation_reason ? `: ${event.cancellation_reason}` : "."}</span></p>}

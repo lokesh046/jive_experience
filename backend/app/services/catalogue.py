@@ -12,7 +12,7 @@ import hashlib
 import json
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -42,6 +42,7 @@ from app.schemas.catalogue import (
     AvailabilityItem,
     EventAvailability,
     EventCreate,
+    EventDuplicate,
     EventUpdate,
     LineupReplace,
     TicketCategoryCreate,
@@ -296,6 +297,88 @@ class CatalogueService:
         await self.session.commit()
         # A draft is not publicly visible, so no public cache entry changes.
         return event
+
+    async def duplicate_event(
+        self, event_id: uuid.UUID, payload: EventDuplicate, *, actor: User
+    ) -> Event:
+        """A new draft with the same content, ticket types and lineup.
+
+        What is copied is everything an admin wrote. What is not: sales, the
+        featured flag, sale dates, status and the URL (a new one is made), so a
+        repeat night starts clean and nothing goes live by accident.
+        """
+        source = await self.events.with_categories(event_id)
+        if source is None:
+            raise NotFoundError("Event not found.", code="EVENT_NOT_FOUND")
+
+        starts_at = payload.starts_at or source.starts_at + timedelta(days=7)
+        shift = starts_at - source.starts_at
+
+        title = f"{source.title} (copy)"[:200]
+        base = slugify(title)
+        slug, attempt = base, 1
+        while await self.events.slug_taken(slug):
+            attempt += 1
+            slug = f"{base}-{attempt}"
+
+        copy = Event(
+            slug=slug,
+            title=title,
+            subtitle=source.subtitle,
+            description=source.description,
+            status=EventStatus.DRAFT,
+            category=source.category,
+            venue_id=source.venue_id,
+            starts_at=starts_at,
+            ends_at=source.ends_at + shift if source.ends_at else None,
+            timezone=source.timezone,
+            banner_image_url=source.banner_image_url,
+            thumbnail_image_url=source.thumbnail_image_url,
+            gallery_image_urls=list(source.gallery_image_urls or []),
+            max_tickets_per_customer=source.max_tickets_per_customer,
+            requires_attendee_name=source.requires_attendee_name,
+            cancellation_policy=source.cancellation_policy,
+            terms_and_conditions=source.terms_and_conditions,
+            location_url=source.location_url,
+            is_featured=False,
+            created_by_id=actor.id,
+        )
+        copy.ticket_categories = [
+            TicketCategory(
+                name=c.name,
+                description=c.description,
+                price_paise=c.price_paise,
+                currency=c.currency,
+                capacity=c.capacity,
+                min_per_booking=c.min_per_booking,
+                max_per_booking=c.max_per_booking,
+                sort_order=c.sort_order,
+                is_active=c.is_active,
+            )
+            for c in source.ticket_categories
+        ]
+        copy.performers = [
+            EventPerformer(
+                name=p.name,
+                role=p.role,
+                photo_url=p.photo_url,
+                performs_at=p.performs_at + shift if p.performs_at else None,
+                sort_order=p.sort_order,
+            )
+            for p in source.performers
+        ]
+        self.events.add(copy)
+        await self.session.flush()
+        await self.audit.record(
+            "event.duplicated",
+            entity_type="event",
+            entity_id=copy.id,
+            actor=actor,
+            before={"source_event_id": str(source.id)},
+            after={"slug": slug, "ticket_categories": len(copy.ticket_categories)},
+        )
+        await self.session.commit()
+        return copy
 
     async def update_event(
         self, event_id: uuid.UUID, payload: EventUpdate, *, actor: User

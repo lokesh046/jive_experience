@@ -25,6 +25,7 @@ from app.schemas.catalogue import (
     EventAdminDetail,
     EventCancelRequest,
     EventCreate,
+    EventDuplicate,
     EventUpdate,
     LineupReplace,
     PerformerOut,
@@ -113,6 +114,23 @@ async def event_detail(
     event_id: uuid.UUID, actor: RequireAdmin, service: CatalogueServiceDep
 ) -> EventAdminDetail:
     return EventAdminDetail.model_validate(await service.admin_event(event_id))
+
+
+@router.post(
+    "/events/{event_id}/duplicate",
+    response_model=EventAdminDetail,
+    status_code=status.HTTP_201_CREATED,
+    summary="Copy an event as a new draft",
+)
+async def duplicate_event(
+    event_id: uuid.UUID,
+    payload: EventDuplicate,
+    actor: RequireAdmin,
+    service: CatalogueServiceDep,
+) -> EventAdminDetail:
+    """Content, ticket types and lineup are copied; sales, status and the URL are not."""
+    event = await service.duplicate_event(event_id, payload, actor=actor)
+    return EventAdminDetail.model_validate(await service.admin_event(event.id))
 
 
 @router.patch("/events/{event_id}", response_model=EventAdminDetail, summary="Update an event")
