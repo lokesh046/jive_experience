@@ -40,6 +40,7 @@ from app.services.outbox import OutboxService
 from app.services.payment import PaymentService
 from app.services.payment_provider import PaymentProvider, get_payment_provider
 from app.services.refund import RefundService
+from app.services.reports import ReportService
 from app.services.staff import StaffService
 from app.services.ticket import TicketService
 from app.services.user import UserService
@@ -175,6 +176,10 @@ def get_ticket_service(
     return TicketService(session, outbox)
 
 
+def get_report_service(session: DbSession, settings: AppSettings) -> ReportService:
+    return ReportService(session, settings)
+
+
 def get_staff_service(session: DbSession) -> StaffService:
     return StaffService(session)
 
@@ -189,6 +194,7 @@ PaymentServiceDep = Annotated[PaymentService, Depends(get_payment_service)]
 RefundServiceDep = Annotated[RefundService, Depends(get_refund_service)]
 TicketServiceDep = Annotated[TicketService, Depends(get_ticket_service)]
 StaffServiceDep = Annotated[StaffService, Depends(get_staff_service)]
+ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]
 OutboxServiceDep = Annotated[OutboxService, Depends(get_outbox_service)]
 
 
