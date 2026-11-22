@@ -121,7 +121,9 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
         {e.terms_and_conditions && (
           <div className="prose">
             <h2>Good to know</h2>
-            <p>{e.terms_and_conditions}</p>
+            <ul className="terms">
+              {e.terms_and_conditions.split(/\r?\n/).map((t) => t.trim()).filter(Boolean).map((t, i) => <li key={i}>{t}</li>)}
+            </ul>
           </div>
         )}
       </div>

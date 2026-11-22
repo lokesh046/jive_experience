@@ -490,3 +490,7 @@ select option { background: #111; }
 .lineup .artists .ph.none { display: grid; place-items: center; font: 400 64px var(--font-serif), serif; color: var(--mute); }
 .lineup .artists .at { display: block; font: 500 12px/1 var(--font-sans), sans-serif; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg); margin-bottom: 8px; }
 @media (max-width: 560px) { .lineup .artists { grid-template-columns: repeat(2, 1fr); gap: 16px; } .lineup .artists h3 { font-size: 20px; } }
+
+.terms { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.terms li { position: relative; padding-left: 22px; }
+.terms li::before { content: ""; position: absolute; left: 2px; top: 0.7em; width: 6px; height: 6px; border-radius: 50%; background: var(--mute); }
