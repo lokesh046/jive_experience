@@ -185,6 +185,8 @@ export interface AssignedEvent {
   slug: string;
   title: string;
   starts_at: string;
+  ends_at: string | null;
+  timezone: string;
   venue_name: string;
   city: string;
 }

@@ -272,5 +272,7 @@ class AssignedEventOut(BaseModel):
     slug: str
     title: str
     starts_at: datetime
+    ends_at: datetime | None = None
+    timezone: str = "Asia/Kolkata"
     venue_name: str
     city: str

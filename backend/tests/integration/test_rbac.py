@@ -8,10 +8,11 @@ from __future__ import annotations
 import uuid
 
 import pytest
+import sqlalchemy as sa
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import UserStatus
+from app.models.user import User, UserStatus
 from tests.integration.conftest import (
     seed_admin,
     sign_in_as,
@@ -264,3 +265,53 @@ async def test_upload_signing_is_admin_only(
     assert ok.status_code in (200, 503)  # 503 only if Cloudinary is not configured
     if ok.status_code == 200:
         assert "signature" in ok.json() and "api_secret" not in ok.text
+
+
+async def test_the_scanner_picker_lists_only_the_events_a_person_may_work(
+    api: AsyncClient, db_session: AsyncSession, google: StubGoogleClient
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.fulfilment import StaffEventAssignment
+    from tests.integration.conftest import seed_staff
+    from tests.integration.test_review_fixes import make_event
+
+    mine, _ = await make_event(db_session)
+    other, _ = await make_event(db_session)
+    cancelled, _ = await make_event(db_session)
+    gone, _ = await make_event(db_session)
+    mine_id, other_id, cancelled_id, gone_id = mine.id, other.id, cancelled.id, gone.id
+    mine_title = mine.title
+    staff = await seed_staff(db_session)
+    staff_id = staff.id
+    for event_id in (mine_id, cancelled_id, gone_id):
+        db_session.add(StaffEventAssignment(user_id=staff.id, event_id=event_id))
+    await db_session.execute(
+        sa.text("UPDATE events SET status = 'CANCELLED' WHERE id = :i"), {"i": cancelled_id}
+    )
+    await db_session.execute(
+        sa.text("UPDATE events SET starts_at = :s WHERE id = :i"),
+        {"s": datetime.now(UTC) - timedelta(days=3), "i": gone_id},
+    )
+    await db_session.commit()
+    db_session.expire_all()
+
+    fresh_staff = await db_session.get(User, staff_id)
+    assert fresh_staff is not None
+    token = await sign_in_as(api, google, fresh_staff)
+    listed = (await api.get("/api/v1/scanner/events", headers=bearer(token))).json()
+    ids = [e["event_id"] for e in listed]
+    # Assigned and live: yes. Not assigned, cancelled, or long over: no.
+    assert ids == [str(mine_id)]
+    assert listed[0]["title"] == mine_title
+    assert listed[0]["timezone"] == "Asia/Kolkata" and "ends_at" in listed[0]
+
+    admin = await sign_in_as(api, google, await seed_admin(db_session))
+    everything = [
+        e["event_id"]
+        for e in (await api.get("/api/v1/scanner/events", headers=bearer(admin))).json()
+    ]
+    assert (
+        str(mine_id) in everything and str(other_id) in everything
+    )  # an admin can scan any live event
+    assert str(cancelled_id) not in everything and str(gone_id) not in everything

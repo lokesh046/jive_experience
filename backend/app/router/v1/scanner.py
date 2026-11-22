@@ -38,17 +38,19 @@ async def my_events(
     catalogue: CatalogueServiceDep,
 ) -> list[AssignedEventOut]:
     """The scanner's event picker — only events this person may work."""
-    assignments = await service.my_events(staff)
+    events = await service.scannable_events(staff)
     return [
         AssignedEventOut(
-            event_id=assignment.event.id,
-            slug=assignment.event.slug,
-            title=assignment.event.title,
-            starts_at=assignment.event.starts_at,
-            venue_name=assignment.event.venue.name,
-            city=assignment.event.venue.city,
+            event_id=event.id,
+            slug=event.slug,
+            title=event.title,
+            starts_at=event.starts_at,
+            ends_at=event.ends_at,
+            timezone=event.timezone,
+            venue_name=event.venue.name,
+            city=event.venue.city,
         )
-        for assignment in assignments
+        for event in events
     ]
 
 

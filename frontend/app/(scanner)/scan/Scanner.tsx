@@ -16,6 +16,30 @@ const HEADLINE: Record<ScanResult, string> = {
 
 const timeOf = (iso: string) => new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(iso)).toUpperCase();
 const STORE = "jive_scan_event";
+const DOORS_BEFORE_MS = 60 * 60 * 1000;      // an event counts as "on" an hour before it starts
+const DEFAULT_LENGTH_MS = 5 * 60 * 60 * 1000; // when no end time was set
+
+type When = { phase: "live" | "soon" | "later" | "ended"; label: string; range: string; day: string };
+
+/** Where an event is in time, in words a person at the gate can use. */
+function whenIs(e: AssignedEvent, now: number): When {
+  const zone = { timeZone: e.timezone };
+  const start = new Date(e.starts_at).getTime();
+  const end = e.ends_at ? new Date(e.ends_at).getTime() : start + DEFAULT_LENGTH_MS;
+  const clock = (ms: number) => new Intl.DateTimeFormat("en-IN", { ...zone, hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(ms)).toUpperCase();
+  const day = new Intl.DateTimeFormat("en-IN", { ...zone, weekday: "short", day: "numeric", month: "short" }).format(new Date(start));
+  const ymd = (ms: number) => new Intl.DateTimeFormat("en-CA", { ...zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+  const range = e.ends_at ? `${clock(start)} to ${clock(end)}` : `from ${clock(start)}`;
+  if (now > end) return { phase: "ended", label: "Ended", range, day };
+  if (now >= start - DOORS_BEFORE_MS) return { phase: "live", label: now >= start ? "Happening now" : "Doors open", range, day };
+  const mins = Math.round((start - now) / 60000);
+  if (ymd(start) === ymd(now)) {
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return { phase: "soon", label: `Today, starts in ${h ? `${h} h ` : ""}${m} min`, range, day };
+  }
+  const tomorrow = ymd(now + 24 * 3600 * 1000) === ymd(start);
+  return { phase: "later", label: tomorrow ? "Tomorrow" : day, range, day };
+}
 
 /** The API words its messages for logs, with ISO timestamps. At the gate they read as a clock time. */
 const readable = (msg: string) =>
@@ -31,18 +55,23 @@ export function Scanner() {
   const [camera, setCamera] = useState<"starting" | "on" | "off">("starting");
   const [attendance, setAttendance] = useState<Attendance | null>(null);
   const [manual, setManual] = useState("");
+  const [now, setNow] = useState(0);
+  const [who, setWho] = useState<string | null>(null);
   const video = useRef<HTMLVideoElement>(null);
   const busy = useRef(false);
   const last = useRef({ code: "", at: 0 });
 
   useEffect(() => {
     api<AssignedEvent[]>("scanner/events")
-      .then((list) => {
-        setEvents(list);
-        const saved = localStorage.getItem(STORE);
-        setEventId(list.find((e) => e.event_id === saved)?.event_id ?? (list.length === 1 ? list[0].event_id : null));
-      })
+      .then((list) => { setEvents(list); setNow(Date.now()); })
       .catch((e) => { setEvents([]); setError(e instanceof ApiError ? e.message : "Could not load your events."); });
+  }, []);
+
+  // Who is signed in, and a clock that keeps the "starts in" wording true.
+  useEffect(() => {
+    api<{ full_name: string | null; email: string }>("auth/me").then((u) => setWho(u.full_name ?? u.email)).catch(() => {});
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
   }, []);
 
   const loadAttendance = useCallback(async (id: string) => {
@@ -142,21 +171,35 @@ export function Scanner() {
   }
 
   if (!eventId) {
+    const rows = events.map((e) => ({ e, w: whenIs(e, now) }));
+    const active = rows.filter((r) => r.w.phase !== "ended");
+    const ended = rows.filter((r) => r.w.phase === "ended");
+    const saved = typeof window !== "undefined" ? localStorage.getItem(STORE) : null;
+    const resume = active.find((r) => r.e.event_id === saved);
+    const open = (id: string) => { localStorage.setItem(STORE, id); setEventId(id); };
+    const card = ({ e, w }: { e: AssignedEvent; w: When }) => (
+      <button key={e.event_id} type="button" className={`sc-event ${w.phase}`} onClick={() => open(e.event_id)}>
+        <span className={`sc-chip ${w.phase}`}>{w.phase === "live" && <i aria-hidden="true" />}{w.label}</span>
+        <b>{e.title}</b>
+        <span>{w.day} · {w.range}</span>
+        <span>{e.venue_name}, {e.city}</span>
+      </button>
+    );
     return (
       <div className="sc-pad">
-        <h1 className="sc-h">Choose an event</h1>
-        <p style={{ margin: "12px 0 28px" }}>Only events you are assigned to are listed.</p>
-        {events.map((e) => (
-          <button key={e.event_id} type="button" className="sc-event" onClick={() => { localStorage.setItem(STORE, e.event_id); setEventId(e.event_id); }}>
-            <b>{e.title}</b>
-            <span>{e.venue_name}, {e.city} · {new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }).format(new Date(e.starts_at))}</span>
-          </button>
-        ))}
+        <p className="sc-who">{who ? `Signed in as ${who}` : "\u00a0"}</p>
+        <h1 className="sc-h">Your events</h1>
+        <p style={{ margin: "12px 0 24px" }}>Tap an event to start scanning. Only events you are assigned to are shown.</p>
+        {resume && <button type="button" className="pill full" style={{ marginBottom: 24 }} onClick={() => open(resume.e.event_id)}>Continue: {resume.e.title}</button>}
+        {active.length === 0 && <p className="sc-empty">Nothing to scan right now. Events appear here from an hour before they start.</p>}
+        {active.map(card)}
+        {ended.length > 0 && <><h2 className="sc-sub">Earlier</h2>{ended.map(card)}</>}
       </div>
     );
   }
 
   const event = events.find((e) => e.event_id === eventId)!;
+  const when = whenIs(event, now);
   const expected = attendance ? attendance.total - attendance.cancelled - attendance.refunded : null;
 
   return (
@@ -164,6 +207,7 @@ export function Scanner() {
       <div className="sc-top">
         <div>
           <b>{event.title}</b>
+          <small>{when.day} · {when.range}</small>
           <small>{event.venue_name}</small>
         </div>
         <div className="sc-count" aria-live="polite">{attendance ? attendance.checked_in : "–"}<small>{expected !== null ? `of ${expected} in` : "in"}</small></div>
@@ -186,7 +230,7 @@ export function Scanner() {
             <button className="pill sm" type="submit">Check</button>
           </form>
         </details>
-        {events.length > 1 && <button type="button" className="pill ghost full" onClick={() => { localStorage.removeItem(STORE); setEventId(null); }}>Change event</button>}
+        <button type="button" className="pill ghost full" onClick={() => { setEventId(null); setResult(null); }}>Your events</button>
       </div>
 
       {result && (

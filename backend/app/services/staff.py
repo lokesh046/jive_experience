@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import BusinessRuleError, ConflictError, NotFoundError
+from app.models.event import PUBLIC_EVENT_STATUSES, Event
 from app.models.fulfilment import StaffEventAssignment
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.catalogue import EventRepository
@@ -107,5 +108,19 @@ class StaffService:
         return await self.assignments.for_event(event_id)
 
     async def my_events(self, staff: User) -> Sequence[StaffEventAssignment]:
-        """The scanner's event picker. Only what this person may work."""
+        """Assignments for a staff member, newest first."""
         return await self.assignments.for_user(staff.id)
+
+    async def scannable_events(self, staff: User) -> list[Event]:
+        """The scanner's event picker, soonest first.
+
+        A staff member sees only the events they are assigned to; an administrator may scan any
+        live event, so sees all of them. Cancelled and draft events never appear, and an event
+        stays listed until the morning after it was held, so a late night is not cut off.
+        """
+        since = datetime.now(UTC) - timedelta(hours=24)
+        if staff.role is UserRole.ADMIN:
+            return list(await self.events.for_scanning(since))
+        assigned = [a.event for a in await self.assignments.for_user(staff.id)]
+        live = [e for e in assigned if e.status in PUBLIC_EVENT_STATUSES and e.starts_at >= since]
+        return sorted(live, key=lambda e: e.starts_at)

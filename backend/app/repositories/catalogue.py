@@ -144,6 +144,19 @@ class EventRepository(BaseRepository[Event]):
         result = await self.session.execute(select(Event.slug).where(Event.venue_id == venue_id))
         return result.scalars().all()
 
+    async def for_scanning(self, since: datetime) -> Sequence[Event]:
+        """Live events from `since` onward, for an administrator's scanner picker."""
+        result = await self.session.execute(
+            select(Event)
+            .where(
+                Event.status.in_(PUBLIC_EVENT_STATUSES),
+                Event.starts_at >= since,
+            )
+            .order_by(Event.starts_at.asc())
+            .limit(100)
+        )
+        return result.scalars().all()
+
     async def public_slugs(self) -> Sequence[str]:
         """Slugs of every event a customer can see, for cache invalidation."""
         result = await self.session.execute(
