@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>JIVE design review</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Newsreader:opsz,wght@6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"><style>main{padding-top:64px}h3{margin:44px 0 8px}.rows a{color:var(--fg)}.rows a:hover{text-decoration:underline;text-underline-offset:5px}</style></head><body>
+<main><div class="wrap narrow"><h1>JIVE screens</h1><p style="margin-top:12px">Review index. Not part of the product.</p>
+<h3>Customer</h3><div class="rows">
+<div><a href="homepage.html">Homepage</a><span>/events, /events/cities</span></div>
+<div><a href="signin.html">Sign in</a><span>/auth/google</span></div>
+<div><a href="checkout.html?state=signin">Checkout · signed out</a><span></span></div>
+<div><a href="checkout.html?state=phone">Checkout · phone needed</a><span>PUT /auth/phone</span></div>
+<div><a href="checkout.html?state=review">Checkout · review and pay</a><span>POST /bookings, /checkout</span></div>
+<div><a href="checkout.html?state=processing">Checkout · confirming</a><span>/verify pending</span></div>
+<div><a href="checkout.html?state=failed">Checkout · payment failed</a><span>/verify failed</span></div>
+<div><a href="checkout.html?state=expired">Checkout · hold ended</a><span>EXPIRED</span></div>
+<div><a href="checkout.html?state=limit">Checkout · ticket limit</a><span></span></div>
+<div><a href="checkout.html?state=soldout">Checkout · sold out</a><span></span></div>
+<div><a href="checkout.html?state=confirmed">Checkout · confirmed</a><span>CONFIRMED</span></div>
+<div><a href="tickets.html">My tickets</a><span>GET /bookings</span></div>
+<div><a href="tickets.html?ref=JV-7K3QX9">Booking and codes · cancel</a><span>/tickets, /refund-quote</span></div>
+<div><a href="tickets.html?ref=JV-2M8LD4">Booking · waiting for payment</a><span></span></div></div>
+<h3>Staff scanner (phone)</h3><div class="rows">
+<div><a href="scanner.html?result=pick">Choose event</a><span>GET /scanner/events</span></div>
+<div><a href="scanner.html">Ready to scan</a><span></span></div>
+<div><a href="scanner.html?result=SUCCESS">SUCCESS</a><span></span></div><div><a href="scanner.html?result=ALREADY_USED">ALREADY_USED</a><span></span></div>
+<div><a href="scanner.html?result=WRONG_EVENT">WRONG_EVENT</a><span></span></div><div><a href="scanner.html?result=CANCELLED">CANCELLED</a><span></span></div>
+<div><a href="scanner.html?result=REFUNDED">REFUNDED</a><span></span></div><div><a href="scanner.html?result=INVALID">INVALID</a><span></span></div>
+<div><a href="scanner.html?result=NOT_ASSIGNED">NOT_ASSIGNED</a><span></span></div><div><a href="scanner.html?result=EXPIRED">EXPIRED</a><span></span></div></div>
+</div></main></body></html>

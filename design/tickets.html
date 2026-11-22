@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My tickets — JIVE</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Newsreader:opsz,wght@6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<style>
+.tabs{display:flex;gap:28px;margin:32px 0 8px;font-size:15px;line-height:1}
+.tabs button{background:none;border:0;color:var(--mute);font:inherit;cursor:pointer;padding:0 0 8px;border-bottom:1px solid transparent}
+.tabs button.on{color:var(--fg);border-color:var(--fg)}
+.bk{display:grid;grid-template-columns:110px 1fr auto;gap:28px;align-items:baseline;padding:32px 0;border-bottom:1px solid var(--line)}
+.bk .d{font:400 28px Newsreader,serif;color:var(--fg)}
+.bk .r{text-align:right;font-size:15px;color:var(--fg)}
+.bk .r span{display:block;color:var(--mute);font-size:14px}
+.tk{display:grid;grid-template-columns:200px 1fr;gap:40px;align-items:center;padding:36px 0;border-bottom:1px solid var(--line)}
+.qr{width:200px;height:200px;background:#fff;border-radius:16px;padding:14px}
+.qr svg{width:100%;height:100%;display:block}
+.void{width:200px;height:200px;border-radius:16px;box-shadow:inset 0 0 0 1px var(--field);display:grid;place-items:center;text-align:center;font-size:14px;line-height:22px;padding:20px}
+.tk .serial{font-variant-numeric:tabular-nums;color:var(--fg);font-size:15px}
+.dialog{margin-top:36px;padding:28px 0;border-top:1px solid var(--line)}
+@media(max-width:820px){.bk{grid-template-columns:1fr;gap:6px}.bk .r{text-align:left}.tk{grid-template-columns:1fr;gap:20px}}
+</style></head><body>
+<header><div class="nav"><a class="logo" href="homepage.html">JIVE</a><ul><li><a href="homepage.html#events">Events</a></li><li><a href="homepage.html#artists">Artists</a></li></ul><a class="pill" href="tickets.html">My tickets</a></div></header>
+<main><div class="wrap" id="app"></div></main>
+<footer><div class="wrap"><span>© 2027 JIVE</span><nav><a href="#">Terms</a><a href="#">Cancellation and refund policy</a><a href="#">Privacy</a><a href="#">Contact</a></nav></div></footer>
+
+<script>
+/* GET /bookings            → list (status, total, items)
+   GET /bookings/{ref}      → detail
+   GET /bookings/{ref}/tickets → tickets; qr_token is null once a ticket is spent
+   GET /bookings/{ref}/refund-quote → cancel dialog
+   POST /bookings/{ref}/cancel */
+const P=new URLSearchParams(location.search),ref=P.get('ref'),view=P.get('view')||'';
+const app=document.getElementById('app');
+function qr(seed){let s=seed,n=25,c='';const r=()=>(s=(s*1664525+1013904223)>>>0)/4294967296;
+ const fin=(x,y)=>x<7&&y<7||x>=n-7&&y<7||x<7&&y>=n-7;
+ for(let y=0;y<n;y++)for(let x=0;x<n;x++){let on;
+  if(fin(x,y)){const a=x%(n-7)<7?x%(n-7):x-(n-7),b=y%(n-7)<7?y%(n-7):y-(n-7);const xx=x<7?x:x-(n-7),yy=y<7?y:y-(n-7);on=xx==0||xx==6||yy==0||yy==6||(xx>=2&&xx<=4&&yy>=2&&yy<=4)}
+  else on=r()>.52; if(on)c+=`<rect x="${x}" y="${y}" width="1" height="1"/>`}
+ return `<svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" fill="#000">${c}</svg>`}
+
+if(!ref){
+ app.innerHTML=`<h1>My tickets</h1>
+ <div class="tabs"><button class="on" data-t="up">Upcoming</button><button data-t="past">Past</button></div>
+ <div id="list"></div>`;
+ const up=[['22 Mar','Resonance in ruin','The Heritage Mills, Mumbai · 2 × General entry','₹3,798','Confirmed','JV-7K3QX9'],
+           ['28 Mar','Sub-sonic warehouse','The Warehouse Project, Bengaluru · 1 × General entry','₹1,499','Waiting for payment','JV-2M8LD4']];
+ const past=[['14 Feb','Quiet frequencies','The Foundry, New Delhi · 2 × General entry','₹2,598','Attended','JV-5H1TB7'],
+             ['2 Jan','Deep listening night','Bandra Vinyl Salon, Mumbai · 1 × Balcony','₹4,500','Cancelled, refunded','JV-9C4RW2']];
+ const draw=a=>document.getElementById('list').innerHTML=a.map(b=>`<a class="bk" href="?ref=${b[5]}"><div class="d">${b[0]}</div><div><h3>${b[1]}</h3><p class="small" style="margin-top:4px">${b[2]}</p></div><div class="r">${b[3]}<span>${b[4]}</span></div></a>`).join('');
+ draw(up);
+ document.querySelector('.tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));draw(b.dataset.t==='up'?up:past)};
+}else{
+ const pending=ref==='JV-2M8LD4';
+ app.innerHTML=`<a class="link" href="tickets.html" style="display:inline-block;margin-bottom:28px">← All tickets</a>
+ <h1>Resonance in ruin</h1>
+ <p style="margin:12px 0 4px">Sat 22 March 2027, 9:00 PM · Doors 8:30 PM</p>
+ <p class="small">The Heritage Mills, Lower Parel, Mumbai</p>
+ <p class="small" style="margin-top:20px">Booking <span style="color:#fff">${ref}</span> · ${pending?'Waiting for payment':'Confirmed'}</p>
+ ${pending?`<div class="notice" style="margin-top:36px"><span>Your tickets are held for</span> <span class="timer" style="font-size:22px;margin-left:8px">02:41</span><br><a class="pill sm" style="margin-top:16px" href="checkout.html">Complete payment</a></div>`:`
+ <div id="tk" style="margin-top:36px"></div>
+ <p class="small" style="margin-top:20px">Show the code at the gate. Each ticket works once, and a ticket that has been scanned cannot be shown again.</p>
+ <div id="cancel"><div class="dialog"><button class="link" id="ask">Cancel this booking</button></div></div>`}`;
+ if(!pending){
+  document.getElementById('tk').innerHTML=
+   [['General entry','JV-7K3QX9-1',true],['General entry','JV-7K3QX9-2',false]].map((t,i)=>`<div class="tk">${t[2]?`<div class="qr">${qr(77+i)}</div>`:`<div class="void">Scanned at 9:12 PM.<br>The code is no longer shown.</div>`}<div><h3>${t[0]}</h3><p class="serial" style="margin-top:6px">${t[1]}</p><p class="small" style="margin-top:6px">${t[2]?'Valid until the end of the event':'Used'}</p></div></div>`).join('');
+  document.getElementById('ask').onclick=()=>document.getElementById('cancel').innerHTML=`<div class="dialog"><h3>Cancel this booking?</h3>
+   <div class="rows" style="margin:16px 0 24px"><div><span class="name">Refund</span><span>₹2,848</span></div><div><span>Share of the amount you paid</span><span>75%</span></div></div>
+   <p class="small" style="margin-bottom:24px">Cancelling cancels every ticket in this booking. This cannot be undone.</p>
+   <button class="pill" id="yes">Cancel booking</button> <button class="link" style="margin-left:20px" onclick="location.reload()">Keep my tickets</button></div>`;
+ }
+}
+</script></body></html>

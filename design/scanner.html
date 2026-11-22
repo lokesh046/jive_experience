@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scanner — JIVE</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Newsreader:opsz,wght@6..72,400&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:#aeaeae;font:400 16px/26px Inter,sans-serif;min-height:100vh;display:flex;justify-content:center}
+.app{width:100%;max-width:430px;min-height:100vh;display:flex;flex-direction:column;position:relative}
+.top{display:flex;justify-content:space-between;align-items:center;padding:20px 20px 16px;border-bottom:1px solid #1c1c1c}
+.top b{font:400 22px Newsreader,serif;color:#fff;display:block;line-height:1.2}
+.top small{font-size:13px;line-height:18px}
+.count{text-align:right;color:#fff;font:400 28px Newsreader,serif;line-height:1}
+.count small{display:block;font:400 12px Inter,sans-serif;color:#aeaeae;margin-top:4px}
+.view{flex:1;display:grid;place-items:center;padding:24px}
+.frame{width:100%;aspect-ratio:1;max-width:340px;position:relative}
+.frame i{position:absolute;width:44px;height:44px;border:2px solid #fff}
+.frame i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0;border-radius:14px 0 0 0}
+.frame i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-radius:0 14px 0 0}
+.frame i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-radius:0 0 0 14px}
+.frame i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-radius:0 0 14px 0}
+.hint{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-size:15px;padding:0 48px}
+.bottom{padding:16px 20px 28px;display:flex;flex-direction:column;gap:14px;align-items:center}
+.pill{display:inline-flex;align-items:center;justify-content:center;height:50px;padding:0 32px;border-radius:999px;background:#fff;color:#000;font:500 16px Inter,sans-serif;border:0;cursor:pointer;width:100%}
+.pill.ghost{background:none;color:#fff;box-shadow:inset 0 0 0 1px #333}
+.link{background:none;border:0;color:#fff;text-decoration:underline;text-underline-offset:6px;font:inherit;font-size:15px;cursor:pointer}
+/* full-screen result */
+.res{position:absolute;inset:0;display:flex;flex-direction:column;padding:28px 24px 28px;color:#fff}
+.res.ok{background:#127a3a}.res.no{background:#b42318}
+.res .ico{width:84px;height:84px;margin-top:56px}
+.res h1{font:400 56px/1.05 Newsreader,serif;margin-top:28px;color:#fff;letter-spacing:-.01em}
+.res p.msg{font-size:19px;line-height:28px;margin-top:12px;color:rgba(255,255,255,.92)}
+.res dl{margin-top:36px;border-top:1px solid rgba(255,255,255,.3)}
+.res dl div{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.3);font-size:16px}
+.res dt{opacity:.8}.res dd{font-weight:500;text-align:right}
+.res .pill{margin-top:auto;background:#fff;color:#000}
+select{background:none;color:#fff;border:0;border-bottom:1px solid #333;font:400 17px Inter,sans-serif;padding:10px 0;width:100%;outline:0}
+select option{background:#111}
+</style></head><body>
+<div class="app" id="app"></div>
+<script>
+/* GET /scanner/events           → events this staff member is assigned to
+   POST /scanner/scan {qr_token, event_id, device_label} → result + message + ticket details
+   GET /scanner/events/{id}/attendance → issued / checked_in
+   Result is one of: SUCCESS ALREADY_USED WRONG_EVENT CANCELLED REFUNDED INVALID NOT_ASSIGNED EXPIRED
+   There is no override: a refused ticket stays refused. */
+const q=new URLSearchParams(location.search).get('result');
+const R={
+ SUCCESS:{ok:1,h:'Let them in',m:'Ticket is valid and has now been used.',d:[['Category','General entry'],['Ticket','JV-7K3QX9-1'],['Name','Aarav Mehta'],['Scanned','9:04 PM']]},
+ ALREADY_USED:{h:'Already used',m:'This ticket was scanned earlier. Do not let them in.',d:[['Category','General entry'],['Ticket','JV-7K3QX9-1'],['First scanned','8:52 PM']]},
+ WRONG_EVENT:{h:'Wrong event',m:'This ticket is for a different event.',d:[['Ticket','JV-2M8LD4-1']]},
+ CANCELLED:{h:'Cancelled',m:'This booking was cancelled. The ticket is not valid.',d:[['Ticket','JV-9C4RW2-1']]},
+ REFUNDED:{h:'Refunded',m:'This booking was refunded. The ticket is not valid.',d:[['Ticket','JV-9C4RW2-2']]},
+ INVALID:{h:'Not recognised',m:'This code is not a JIVE ticket. Ask the guest to open it from their account.',d:[]},
+ NOT_ASSIGNED:{h:'Not your event',m:'You are not assigned to scan for this event. Ask an admin to add you.',d:[]},
+ EXPIRED:{h:'Event is over',m:'This ticket was only valid until the end of the event.',d:[['Ticket','JV-3D7NQ5-1'],['Event ended','Sat 22 March, 1:00 AM']]}
+};
+const ok='<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10.5"/><path d="m7.5 12.5 3 3 6-7"/></svg>';
+const no='<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10.5"/><path d="m8.500 8.500 7 7m0-7-7 7"/></svg>';
+const app=document.getElementById('app');
+const base=`<div class="top"><div><b>Resonance in ruin</b><small>Main gate · Sat 22 March 2027</small></div><div class="count">184<small>of 412 in</small></div></div>`;
+if(q==='pick'){
+ app.innerHTML=`<div class="top"><div><b>JIVE scanner</b><small>Signed in as Staff</small></div></div><div class="view" style="place-items:start"><div style="width:100%;padding-top:24px"><h1 style="font:400 36px/1.1 Newsreader,serif;color:#fff;margin-bottom:12px">Choose an event</h1><p style="margin-bottom:32px">Only events you are assigned to are listed.</p><select><option>Resonance in ruin — Sat 22 March</option><option>Sub-sonic warehouse — Sat 28 March</option></select></div></div><div class="bottom"><button class="pill" onclick="location.search=''">Start scanning</button></div>`;
+}else if(R[q]){
+ const r=R[q];
+ app.innerHTML=base+`<div class="res ${r.ok?'ok':'no'}">${r.ok?ok:no}<h1>${r.h}</h1><p class="msg">${r.m}</p>${r.d.length?`<dl>${r.d.map(x=>`<div><dt>${x[0]}</dt><dd>${x[1]}</dd></div>`).join('')}</dl>`:''}<button class="pill" onclick="location.search=''">Scan next</button></div>`;
+}else{
+ app.innerHTML=base+`<div class="view"><div class="frame"><i></i><i></i><i></i><i></i><div class="hint">Point the camera at the guest’s ticket code</div></div></div><div class="bottom"><button class="pill ghost" onclick="location.search='?result=pick'">Change event</button></div>`;
+}
+</script></body></html>
