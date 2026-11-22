@@ -35,6 +35,12 @@ function Includes({ text }: { text: string | null }) {
   return <ul className="inc">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>;
 }
 
+/** A premium look for VIP-style types, or for the top-priced type when an event has several. */
+function isPremium(c: TicketCategoryPublic, all: TicketCategoryPublic[]): boolean {
+  if (/vip|premium|platinum|gold|black|elite|royal/i.test(c.name)) return true;
+  return all.length > 1 && c.price_paise === Math.max(...all.map((x) => x.price_paise)) && c.price_paise > 0;
+}
+
 const isOut = (c: TicketCategoryPublic) => c.is_sold_out || c.available <= 0;
 const capFor = (c: TicketCategoryPublic, maxPerCustomer: number) => Math.max(0, Math.min(c.max_per_booking, c.available, maxPerCustomer));
 
@@ -122,7 +128,7 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
 
   return (
     <>
-      <TicketPreview when={preview.when} title={preview.title} venue={preview.venue} ticket={current?.name ?? null} admit={count} total={count ? inr(total) : null} />
+      <TicketPreview when={preview.when} title={preview.title} venue={preview.venue} ticket={current?.name ?? null} premium={!!current && isPremium(current, cats)} admit={count} total={count ? inr(total) : null} />
 
       <h3 className="step">1. Choose a ticket type</h3>
       <div className="types" role="radiogroup" aria-label="Ticket type">

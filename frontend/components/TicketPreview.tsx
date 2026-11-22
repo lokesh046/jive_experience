@@ -1,9 +1,9 @@
 /** A ticket that fills in as the customer chooses. It is a preview: the real ticket and its QR code are issued after payment. */
 export function TicketPreview({
-  when, title, venue, ticket, admit, total,
-}: { when: string; title: string; venue: string; ticket: string | null; admit: number; total: string | null }) {
+  when, title, venue, ticket, admit, total, premium = false,
+}: { when: string; title: string; venue: string; ticket: string | null; admit: number; total: string | null; premium?: boolean }) {
   return (
-    <figure className="tkp" aria-label="Ticket preview">
+    <figure className={`tkp${premium ? " prem" : ""}`} aria-label="Ticket preview">
       <div className="tkp-main">
         <p className="tkp-kick">{when}</p>
         <h3 className="tkp-title">{title}</h3>
@@ -15,7 +15,7 @@ export function TicketPreview({
         </dl>
       </div>
       <div className="tkp-stub" aria-hidden="true">
-        <span className="tkp-admit">{admit > 1 ? `Admit ${admit}` : "Admit one"}</span>
+        <span className="tkp-admit">{premium ? (admit > 1 ? `VIP · admit ${admit}` : "VIP · admit one") : admit > 1 ? `Admit ${admit}` : "Admit one"}</span>
         <span className="tkp-bars" />
         <span className="tkp-code">JIVE · after payment</span>
       </div>
