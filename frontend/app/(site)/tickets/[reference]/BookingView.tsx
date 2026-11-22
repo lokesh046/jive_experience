@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { ApiError, api, rememberNext } from "@/lib/api-client";
 import { eventsById } from "@/lib/events-index";
 import { inr, longDate, timeOf } from "@/lib/format";
-import type { Booking, EventListItem, RefundQuote, Ticket } from "@/lib/types";
+import { isPremiumType } from "@/lib/premium";
+import type { Booking, EventDetail, EventListItem, RefundQuote, Ticket } from "@/lib/types";
 
 function QrCode({ value }: { value: string }) {
   const [svg, setSvg] = useState("");
@@ -25,6 +26,7 @@ export function BookingView({ reference }: { reference: string }) {
   const [b, setB] = useState<Booking | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [event, setEvent] = useState<EventListItem | null>(null);
+  const [prices, setPrices] = useState<number[]>([]);
   const [quote, setQuote] = useState<RefundQuote | null>(null);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -44,7 +46,10 @@ export function BookingView({ reference }: { reference: string }) {
         ]);
         if (!live) return;
         setTickets(Array.isArray(t) ? t : t.items);
-        setEvent(ev.get(booking.event_id) ?? null);
+        const found = ev.get(booking.event_id) ?? null;
+        setEvent(found);
+        // The event's other ticket types decide whether this one is its top tier.
+        if (found) api<EventDetail>(`events/${found.slug}`).then((d) => live && setPrices(d.ticket_categories.map((c) => c.price_paise))).catch(() => {});
       } catch (e) {
         if (!live) return;
         if (e instanceof ApiError && e.status === 401) { rememberNext(`/tickets/${reference}`); router.replace("/signin"); return; }
@@ -104,14 +109,36 @@ export function BookingView({ reference }: { reference: string }) {
           <div style={{ marginTop: 36 }}>
             {tickets.map((t, n) => {
               const used = t.status === "CHECKED_IN";
+              const item = b.items.find((i) => i.ticket_category_id === t.ticket_category_id);
+              const name = item?.category_name ?? "Ticket";
+              const all = prices.length ? prices : b.items.map((i) => i.unit_price_paise);
+              const code = t.qr_token ? <QrCode value={t.qr_token} /> : <div className="void">{used ? "This ticket has been scanned. The code is no longer shown." : "This ticket is no longer valid."}</div>;
+              const state = t.qr_token ? "Valid until the end of the event" : used ? "Used" : "Not valid";
+              if (item && isPremiumType(name, item.unit_price_paise, all)) {
+                return (
+                  <div className={`rt${t.qr_token ? "" : " dim"}`} key={t.id}>
+                    <div className="rt-main">
+                      <p className="rt-line">JIVE presents{event ? ` · ${event.title}` : ""}</p>
+                      {event && <p className="rt-line">{longDate(event.starts_at, event.timezone)} · {timeOf(event.starts_at, event.timezone)}</p>}
+                      <p className="rt-big">{name}</p>
+                      <p className="rt-line">{event ? `${event.venue_name}, ${event.city}` : ""}</p>
+                      <p className="rt-meta">Ticket {n + 1} of {tickets.length} · {t.serial} · {state}</p>
+                    </div>
+                    <div className="rt-stub">
+                      {code}
+                      <span className="rt-admit">Admit one</span>
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <div className="tk" key={t.id}>
-                  {t.qr_token ? <QrCode value={t.qr_token} /> : <div className="void">{used ? "This ticket has been scanned. The code is no longer shown." : "This ticket is no longer valid."}</div>}
+                  {code}
                   <div>
-                    <span className="cat">{b.items.find((i) => i.ticket_category_id === t.ticket_category_id)?.category_name ?? "Ticket"}</span>
+                    <span className="cat">{name}</span>
                     <h3>Ticket {n + 1} of {tickets.length}</h3>
                     <p className="serial" style={{ marginTop: 6 }}>{t.serial}</p>
-                    <p className="small" style={{ marginTop: 6 }}>{t.qr_token ? "Valid until the end of the event" : used ? "Used" : "Not valid"}</p>
+                    <p className="small" style={{ marginTop: 6 }}>{state}</p>
                   </div>
                 </div>
               );

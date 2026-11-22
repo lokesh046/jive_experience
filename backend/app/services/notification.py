@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 import uuid
 from html import escape
 from zoneinfo import ZoneInfo
@@ -37,6 +38,19 @@ def qr_png(token: str) -> bytes:
     return out.getvalue()
 
 
+PREMIUM_NAME = re.compile(r"vip|premium|platinum|gold|black|elite|royal", re.IGNORECASE)
+
+
+def is_premium_type(name: str, price_paise: int, all_prices: list[int]) -> bool:
+    """VIP-style name, or the top-priced type of an event that has several.
+
+    The same rule the website uses to give a ticket its premium look.
+    """
+    if PREMIUM_NAME.search(name):
+        return True
+    return len(all_prices) > 1 and price_paise > 0 and price_paise == max(all_prices)
+
+
 class NotificationService:
     def __init__(self, session: AsyncSession, settings: Settings, tickets: TicketService) -> None:
         self.session = session
@@ -66,7 +80,9 @@ class NotificationService:
             return False
 
         # Explicit, so a venue that is not loaded yet cannot trigger a lazy load here.
-        await self.session.refresh(event, attribute_names=["venue"])
+        await self.session.refresh(event, attribute_names=["venue", "ticket_categories"])
+        items = {item.ticket_category_id: item for item in await self.bookings.items(booking.id)}
+        all_prices = [c.price_paise for c in event.ticket_categories]
         zone = ZoneInfo(event.timezone or self.settings.default_timezone)
         when = event.starts_at.astimezone(zone).strftime("%a %d %b %Y, %I:%M %p").replace(" 0", " ")
         venue = f"{event.venue.name}, {event.venue.city}"
@@ -85,13 +101,33 @@ class NotificationService:
             png = await asyncio.to_thread(qr_png, self.tickets.qr_token_for(ticket))
             images.append(InlineImage(cid=cid, png=png))
             serial = escape(ticket.serial)
-            blocks.append(
-                f'<div style="{card}">'
-                f'<div style="font:600 14px sans-serif;margin-bottom:8px">'
-                f"Ticket {index} of {len(rows)} · {serial}</div>"
-                f'<img src="cid:{cid}" width="200" height="200" alt="Entry code {serial}">'
-                "</div>"
+            item = items.get(ticket.ticket_category_id)
+            kind = escape(item.category_name) if item else "Ticket"
+            img = (
+                f'<img src="cid:{cid}" width="200" height="200" '
+                f'alt="Entry code {serial}" style="display:block">'
             )
+            if item and is_premium_type(item.category_name, item.unit_price_paise, all_prices):
+                # The warm orange of the website's premium ticket, in plain email-safe HTML.
+                blocks.append(
+                    '<div style="margin:0 0 24px;padding:22px;border-radius:18px;'
+                    'background:#e5702f;color:#5a3520;text-align:center">'
+                    '<div style="font:600 12px sans-serif;letter-spacing:.14em">'
+                    "JIVE PRESENTS</div>"
+                    f'<div style="font:700 46px/1.05 sans-serif;margin:6px 0 14px">'
+                    f"{kind.upper()}</div>"
+                    '<div style="display:inline-block;background:#fff;padding:12px;'
+                    f'border-radius:14px">{img}</div>'
+                    f'<div style="font:600 13px sans-serif;margin-top:12px">'
+                    f"Ticket {index} of {len(rows)} · {serial}</div></div>"
+                )
+            else:
+                blocks.append(
+                    f'<div style="{card}">'
+                    f'<div style="font:600 14px sans-serif;margin-bottom:8px">'
+                    f"{kind} · ticket {index} of {len(rows)} · {serial}</div>"
+                    f'<div style="display:inline-block">{img}</div></div>'
+                )
             lines.append(f"Ticket {index} of {len(rows)}: {ticket.serial}")
 
         body_style = (

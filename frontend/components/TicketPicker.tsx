@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, rememberNext } from "@/lib/api-client";
 import { inr } from "@/lib/format";
+import { isPremiumType } from "@/lib/premium";
 import { TicketPreview } from "@/components/TicketPreview";
 import type { Availability, Booking, TicketCategoryPublic } from "@/lib/types";
 
@@ -35,11 +36,8 @@ function Includes({ text }: { text: string | null }) {
   return <ul className="inc">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>;
 }
 
-/** A premium look for VIP-style types, or for the top-priced type when an event has several. */
-function isPremium(c: TicketCategoryPublic, all: TicketCategoryPublic[]): boolean {
-  if (/vip|premium|platinum|gold|black|elite|royal/i.test(c.name)) return true;
-  return all.length > 1 && c.price_paise === Math.max(...all.map((x) => x.price_paise)) && c.price_paise > 0;
-}
+const isPremium = (c: TicketCategoryPublic, all: TicketCategoryPublic[]) =>
+  isPremiumType(c.name, c.price_paise, all.map((x) => x.price_paise));
 
 const isOut = (c: TicketCategoryPublic) => c.is_sold_out || c.available <= 0;
 const capFor = (c: TicketCategoryPublic, maxPerCustomer: number) => Math.max(0, Math.min(c.max_per_booking, c.available, maxPerCustomer));

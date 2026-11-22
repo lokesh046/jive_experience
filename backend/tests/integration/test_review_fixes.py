@@ -1199,3 +1199,39 @@ async def test_cancellation_and_refund_emails_reach_the_customer(
     assert reference in cancelled.subject
     assert "₹1,000.00" in refunded.subject and title in refunded.subject
     assert refunded.images == [] and cancelled.images == []
+
+
+async def test_vip_ticket_email_uses_the_premium_block(
+    db_session: AsyncSession, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.mailer import Mail
+    from app.services.notification import NotificationService, is_premium_type
+
+    assert is_premium_type("VIP", 1, [1]) is True
+    assert is_premium_type("General", 100, [100, 500]) is False
+    assert is_premium_type("Front row", 500, [100, 500]) is True
+    assert is_premium_type("Only type", 500, [500]) is False
+
+    _, booking, _ = await _confirmed_booking_with_tickets(db_session, quantity=1)
+    await db_session.execute(
+        sa.text("UPDATE booking_items SET category_name = 'VIP' WHERE booking_id = :b"),
+        {"b": booking.id},
+    )
+    await db_session.commit()
+    sent: list[Mail] = []
+
+    async def fake_send(_settings: Settings, mail: Mail) -> None:
+        sent.append(mail)
+
+    monkeypatch.setattr("app.core.mailer.send_mail", fake_send)
+    on = settings.model_copy(
+        update={
+            "smtp_host": "smtp.example.com",
+            "smtp_username": "u",
+            "smtp_password": SecretStr("p"),
+            "mail_from": "tickets@example.com",
+        }
+    )
+    tickets = TicketService(db_session, OutboxService(db_session), on)
+    assert await NotificationService(db_session, on, tickets).send_tickets(booking.id) is True
+    assert "#e5702f" in sent[0].html and "VIP" in sent[0].html
