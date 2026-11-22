@@ -206,6 +206,21 @@ class InventoryService:
             if reservation is not None:
                 reservation.booking_id = booking_id
 
+    async def sell_directly(self, category: TicketCategory, quantity: int) -> None:
+        """Take stock for a sale that has no checkout, such as a complimentary ticket.
+
+        The same capacity guard as an online hold, then straight to sold, so a
+        category can never be oversold by a hand-issued ticket either.
+        """
+        if not await self.inventory.try_hold(category.id, quantity):
+            raise ConflictError(
+                f"{category.name} does not have {quantity} ticket(s) left.",
+                code="INSUFFICIENT_INVENTORY",
+                details={"ticket_category_id": str(category.id)},
+            )
+        if not await self.inventory.commit_hold(category.id, quantity):
+            raise ConflictError("Could not record the sale.", code="BOOKING_CONFLICT")
+
     async def commit_for_booking(self, booking_id: uuid.UUID) -> bool:
         """Turn this booking's holds into sales.
 

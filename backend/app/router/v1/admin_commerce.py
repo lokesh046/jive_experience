@@ -21,6 +21,7 @@ from app.schemas.booking import (
     AttendanceOut,
     BookingAdminOut,
     BookingCancelRequest,
+    ManualTicketRequest,
     RefundCreateRequest,
     RefundOut,
     StaffAssignmentOut,
@@ -213,3 +214,24 @@ async def attendance(
         refunded=counts.get("REFUNDED", 0),
         total=counts.get("TOTAL", 0),
     )
+
+
+@router.post(
+    "/events/{event_id}/manual-tickets",
+    response_model=BookingAdminOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Issue complimentary or cash-paid tickets",
+)
+async def issue_manual_tickets(
+    event_id: uuid.UUID,
+    payload: ManualTicketRequest,
+    actor: RequireAdmin,
+    service: BookingServiceDep,
+) -> BookingAdminOut:
+    """For artists, sponsors, press and door sales. The recipient is emailed their QR codes.
+
+    Complimentary tickets are free. Cash records the ticket price as revenue. Both use
+    real capacity and show in attendance and sales.
+    """
+    booking = await service.issue_manually(event_id, payload, actor=actor)
+    return BookingAdminOut.model_validate(booking)

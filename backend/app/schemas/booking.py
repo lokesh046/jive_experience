@@ -11,9 +11,15 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.models.commerce import BookingStatus, PaymentStatus, RefundReason, RefundStatus
+from app.models.commerce import (
+    BookingSource,
+    BookingStatus,
+    PaymentStatus,
+    RefundReason,
+    RefundStatus,
+)
 from app.models.fulfilment import CheckinResult, TicketStatus
 
 # ----------------------------------------------------------------- booking ---
@@ -46,6 +52,7 @@ class BookingItemOut(BaseModel):
 class BookingOut(BaseModel):
     id: uuid.UUID
     reference: str
+    source: BookingSource = BookingSource.ONLINE
     event_id: uuid.UUID
     status: BookingStatus
     quantity: int
@@ -61,6 +68,29 @@ class BookingOut(BaseModel):
     items: list[BookingItemOut] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
+
+
+class ManualTicketRequest(BaseModel):
+    """Tickets an administrator issues by hand: free, or paid in cash."""
+
+    kind: BookingSource
+    email: EmailStr
+    full_name: Annotated[str, Field(min_length=1, max_length=120)]
+    ticket_category_id: uuid.UUID
+    quantity: Annotated[int, Field(ge=1, le=20)] = 1
+    note: Annotated[str | None, Field(default=None, max_length=500)] = None
+
+    @field_validator("kind")
+    @classmethod
+    def _not_online(cls, value: BookingSource) -> BookingSource:
+        if value is BookingSource.ONLINE:
+            raise ValueError("Choose complimentary or cash. Online sales go through checkout.")
+        return value
+
+    @field_validator("full_name", "note", mode="before")
+    @classmethod
+    def _strip(cls, value: object) -> object:
+        return value.strip() or None if isinstance(value, str) else value
 
 
 class BookingAdminOut(BookingOut):

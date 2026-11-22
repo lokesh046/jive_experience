@@ -42,7 +42,7 @@ export default function Bookings() {
           {list.data.items.map((b) => (
             <div key={b.id}>
               <button type="button" className="tr" style={{ gridTemplateColumns: cols }} aria-expanded={open === b.id} onClick={() => setOpen(open === b.id ? null : b.id)}>
-                <span className="name">{b.reference}</span><span>{titleOf(b.event_id)}</span><span className="status">{label(b.status)}</span><span className="num">{b.quantity}</span><span className="num">{inr(b.total_paise)}</span>
+                <span className="name">{b.reference}{b.source && b.source !== "ONLINE" && <span className="tag">{b.source === "CASH" ? "Cash" : "Free"}</span>}</span><span>{titleOf(b.event_id)}</span><span className="status">{label(b.status)}</span><span className="num">{b.quantity}</span><span className="num">{inr(b.total_paise)}</span>
               </button>
               {open === b.id && <Detail booking={b} onChange={list.reload} />}
             </div>

@@ -697,3 +697,5 @@ select option { background: #111; }
 .pol-preview { margin-top: 20px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 16px; background: #0b0b0b; }
 .pol-preview b { display: block; font: 500 12px/1 var(--font-sans), sans-serif; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mute); margin-bottom: 10px; }
 .pol-preview p + p { margin-top: 6px; }
+
+.tag { display: inline-block; margin-left: 10px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--field); font: 500 11px/1.4 var(--font-sans), sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); vertical-align: middle; }

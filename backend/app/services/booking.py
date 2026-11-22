@@ -25,12 +25,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.core.errors import BusinessRuleError, ConflictError, NotFoundError, PermissionDeniedError
 from app.core.pagination import PageParams
-from app.models.commerce import Booking, BookingItem, BookingStatus
-from app.models.event import Event
-from app.models.user import User, UserRole
-from app.repositories.catalogue import EventRepository
+from app.models.commerce import Booking, BookingItem, BookingSource, BookingStatus
+from app.models.event import Event, EventStatus
+from app.models.user import User, UserRole, UserStatus
+from app.repositories.catalogue import EventRepository, TicketCategoryRepository
 from app.repositories.commerce import BookingRepository, PaymentRepository
-from app.schemas.booking import BookingCreateRequest
+from app.repositories.user import UserRepository
+from app.schemas.booking import BookingCreateRequest, ManualTicketRequest
 from app.services.audit import AuditService
 from app.services.inventory import InventoryService, RequestedItem
 from app.services.outbox import TOPIC_BOOKING_CONFIRMED, OutboxService
@@ -216,6 +217,115 @@ class BookingService:
                 "Add a phone number to your account before booking.",
                 code="PHONE_NUMBER_REQUIRED",
             )
+
+    # ------------------------------------------------------ hand-issued ---
+
+    async def issue_manually(
+        self, event_id: uuid.UUID, payload: ManualTicketRequest, *, actor: User
+    ) -> Booking:
+        """Issue tickets without checkout: free (complimentary) or paid in cash.
+
+        The booking is confirmed on the spot and goes through the same outbox
+        path as a paid one, so the worker issues the QR tickets and emails them
+        to the recipient. Capacity is taken with the same guarded update an
+        online sale uses. A cash booking records the price as revenue; neither
+        kind has a gateway payment, so there is nothing to refund through one.
+        """
+        event = await self.events.get(event_id)
+        if event is None:
+            raise NotFoundError("Event not found.", code="EVENT_NOT_FOUND")
+        if event.status not in (EventStatus.PUBLISHED, EventStatus.SOLD_OUT):
+            raise BusinessRuleError(
+                "Tickets can only be issued for a published event.", code="EVENT_NOT_SELLABLE"
+            )
+        category = await TicketCategoryRepository(self.session).get(payload.ticket_category_id)
+        if category is None or category.event_id != event.id:
+            raise NotFoundError(
+                "Ticket category not found for this event.", code="CATEGORY_NOT_FOUND"
+            )
+
+        users = UserRepository(self.session)
+        email = str(payload.email).lower()
+        recipient = await users.by_email(email)
+        if recipient is None:
+            # A customer row with no Google identity yet. When this person signs in with
+            # Google under this email, the existing row is linked and they see their tickets.
+            recipient = User(
+                role=UserRole.CUSTOMER,
+                status=UserStatus.ACTIVE,
+                email=email,
+                full_name=payload.full_name,
+            )
+            self.session.add(recipient)
+            await self.session.flush()
+        elif recipient.status is not UserStatus.ACTIVE:
+            raise BusinessRuleError(
+                "That account is suspended, so tickets cannot be issued to it.",
+                code="ACCOUNT_NOT_ACTIVE",
+            )
+        recipient_id = recipient.id
+
+        await self.inventory.sell_directly(category, payload.quantity)
+
+        unit = category.price_paise if payload.kind is BookingSource.CASH else 0
+        total = unit * payload.quantity
+        now = datetime.now(UTC)
+        booking = Booking(
+            reference=await self._unique_reference(),
+            user_id=recipient_id,
+            event_id=event.id,
+            status=BookingStatus.CONFIRMED,
+            subtotal_paise=total,
+            fees_paise=0,
+            total_paise=total,
+            quantity=payload.quantity,
+            currency=self.settings.default_currency,
+            confirmed_at=now,
+            customer_note=payload.note,
+            source=payload.kind,
+            issued_by_id=actor.id,
+        )
+        self.bookings.add(booking)
+        await self.session.flush()
+        self.session.add(
+            BookingItem(
+                booking_id=booking.id,
+                ticket_category_id=category.id,
+                category_name=category.name,
+                unit_price_paise=unit,
+                quantity=payload.quantity,
+                line_total_paise=total,
+            )
+        )
+        await self.session.flush()
+        await self.outbox.enqueue(
+            topic=TOPIC_BOOKING_CONFIRMED,
+            payload={"booking_id": str(booking.id), "reference": booking.reference},
+            dedup_key=f"booking.confirmed:{booking.id}",
+        )
+        await self.audit.record(
+            "booking.issued_manually",
+            entity_type="booking",
+            entity_id=booking.id,
+            actor=actor,
+            after={
+                "kind": payload.kind.value,
+                "event_id": str(event.id),
+                "category": category.name,
+                "quantity": payload.quantity,
+                "total_paise": total,
+                "recipient_id": str(recipient_id),
+            },
+        )
+        await self.session.commit()
+        await self.session.refresh(booking, attribute_names=["items"])
+        logger.info(
+            "booking_issued_manually",
+            reference=booking.reference,
+            kind=payload.kind.value,
+            quantity=payload.quantity,
+        )
+        return booking
 
     # ---------------------------------------------------------- confirm ---
 

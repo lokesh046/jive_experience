@@ -152,6 +152,7 @@ class ReportRepository:
                 User.email,
                 Booking.reference,
                 Ticket.checked_in_at,
+                Booking.source,
             )
             .join(Booking, Booking.id == Ticket.booking_id)
             .join(User, User.id == Ticket.user_id)

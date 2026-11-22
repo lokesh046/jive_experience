@@ -29,6 +29,7 @@ from app.core.errors import BusinessRuleError, ConflictError, NotFoundError
 from app.core.money import percentage_of
 from app.models.commerce import (
     Booking,
+    BookingSource,
     BookingStatus,
     Payment,
     PaymentStatus,
@@ -107,6 +108,10 @@ class RefundService:
 
         if booking.status is not BookingStatus.CONFIRMED:
             return RefundQuote(False, 0, 0, "Only a confirmed booking can be refunded.")
+        if booking.source is not BookingSource.ONLINE:
+            return RefundQuote(
+                False, 0, 0, "These tickets were issued by us. Contact us to change them."
+            )
         if event.starts_at <= now:
             return RefundQuote(False, 0, 0, "The event has already started.")
 

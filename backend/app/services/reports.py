@@ -160,6 +160,7 @@ class ReportService:
                         a.booking_reference,
                         a.status.value,
                         a.checked_in_at.isoformat() if a.checked_in_at else "",
+                        a.source.value,
                     )
                 ]
             )
@@ -185,6 +186,7 @@ CSV_HEADER = [
     "Booking",
     "Status",
     "Checked in at",
+    "Source",
 ]
 
 
@@ -204,5 +206,6 @@ def _attendee(row: Sequence[object]) -> AttendeeOut:
             "customer_email": row[5],
             "booking_reference": row[6],
             "checked_in_at": row[7],
+            "source": row[8],
         }
     )

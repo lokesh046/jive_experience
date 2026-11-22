@@ -7,6 +7,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from app.models.commerce import BookingSource
 from app.models.event import EventStatus
 from app.models.fulfilment import CheckinResult, TicketStatus
 
@@ -64,6 +65,7 @@ class AttendeeOut(BaseModel):
     customer_name: str | None = None
     customer_email: str
     booking_reference: str
+    source: BookingSource = BookingSource.ONLINE
     checked_in_at: datetime | None = None
 
 

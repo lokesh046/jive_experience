@@ -9,6 +9,7 @@ import { PolicyEditor } from "@/components/admin/PolicyEditor";
 import type { PolicyTier } from "@/lib/policy";
 import { GalleryField } from "@/components/admin/GalleryField";
 import { PhotoField } from "@/components/admin/PhotoField";
+import { inr } from "@/lib/format";
 import { useData } from "@/lib/use-data";
 import type { AttendeeRow, Attendance, CategoryAdmin, EventAdmin, Page, ScanRow, StaffAssignment, UserAdmin, VenueFull } from "@/lib/types";
 
@@ -27,6 +28,7 @@ export function EventEditor({ eventId }: { eventId?: string }) {
   const ev = useData<EventAdmin>(eventId ? `admin/events/${eventId}` : null);
   const venues = useData<Page<VenueFull>>("admin/venues?size=100");
   const [busy, setBusy] = useState(false);
+  const [issued, setIssued] = useState(0);
   const [note, setNote] = useState<{ text: string; ok?: boolean } | null>(null);
   // What the form shows: the saved event, with the admin's unsaved edits on top.
   const [edits, setEdits] = useState<Partial<Form>>({});
@@ -123,7 +125,8 @@ export function EventEditor({ eventId }: { eventId?: string }) {
       {event && <Categories event={event} onChange={ev.reload} />}
       {event && <LineupEditor event={event} onSaved={ev.reload} />}
       {event && <Staff eventId={event.id} />}
-      {event && <AttendanceBlock eventId={event.id} />}
+      {event && (event.status === "PUBLISHED" || event.status === "SOLD_OUT") && <IssueTickets event={event} onIssued={() => { setIssued((n) => n + 1); ev.reload(); }} />}
+      {event && <AttendanceBlock key={issued} eventId={event.id} />}
     </>
   );
 }
@@ -278,6 +281,62 @@ function Staff({ eventId }: { eventId: string }) {
   );
 }
 
+function IssueTickets({ event, onIssued }: { event: EventAdmin; onIssued: () => void }) {
+  const cats = event.ticket_categories.filter((c) => c.is_active);
+  const [kind, setKind] = useState<"COMPLIMENTARY" | "CASH">("COMPLIMENTARY");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [cat, setCat] = useState("");
+  const [qty, setQty] = useState(1);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok?: boolean } | null>(null);
+  const chosen = cats.find((c) => c.id === (cat || cats[0]?.id));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!chosen) return;
+    setBusy(true); setMsg(null);
+    try {
+      const b = await api<{ reference: string; total_paise: number }>(`admin/events/${event.id}/manual-tickets`, {
+        method: "POST",
+        json: { kind, email: email.trim(), full_name: name.trim(), ticket_category_id: chosen.id, quantity: qty, note: note.trim() || null },
+      });
+      setMsg({ text: `Issued ${qty} × ${chosen.name} (booking ${b.reference}). ${email.trim()} is emailed the QR codes within a minute.`, ok: true });
+      setName(""); setEmail(""); setNote(""); setQty(1);
+      onIssued();
+    } catch (err) { setMsg({ text: msgOf(err) }); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <section className="ad-sec" aria-labelledby="iss-h">
+      <h2 id="iss-h">Issue tickets by hand</h2>
+      <p className="hint" style={{ marginBottom: 20 }}>For artists, sponsors and press (free), or someone who paid you cash. They use real capacity, work with the gate scanner like any ticket, and the person is emailed their QR codes. They show in the attendee list as &quot;Free&quot; or &quot;Cash&quot;.</p>
+      {cats.length === 0 ? <p className="empty">Add an active ticket type first.</p> : (
+        <form onSubmit={submit}>
+          <div className="ad-grid">
+            <div className="f wide" role="group" aria-labelledby="iss-k">
+              <span id="iss-k" className="lbl">Kind</span>
+              <label className="radio"><input type="radio" name="kind" checked={kind === "COMPLIMENTARY"} onChange={() => setKind("COMPLIMENTARY")} /> Complimentary (free)</label>
+              <label className="radio"><input type="radio" name="kind" checked={kind === "CASH"} onChange={() => setKind("CASH")} /> Cash payment received{chosen ? ` (${inr(chosen.price_paise)} per ticket)` : ""}</label>
+            </div>
+            <div className="f"><label htmlFor="in">Name</label><input id="in" value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} /></div>
+            <div className="f"><label htmlFor="ie">Email</label><input id="ie" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
+            <div className="f"><label htmlFor="ic">Ticket type</label>
+              <select id="ic" value={chosen?.id ?? ""} onChange={(e) => setCat(e.target.value)}>{cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div className="f"><label htmlFor="iq">How many</label><input id="iq" type="number" min={1} max={20} value={qty} onChange={(e) => setQty(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} /></div>
+            <div className="f wide"><label htmlFor="ino">Note (only you see this)</label><input id="ino" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Artist guest, sponsor, door sale…" /></div>
+          </div>
+          {msg && <p className={msg.ok ? "ok" : "err"} role={msg.ok ? "status" : "alert"} style={msg.ok ? { marginLeft: 0, marginTop: 20 } : undefined}>{msg.text}</p>}
+          <div className="ad-actions"><button className="pill" type="submit" disabled={busy}>{busy ? "Issuing…" : kind === "CASH" ? "Record cash sale and issue" : "Issue free tickets"}</button></div>
+        </form>
+      )}
+    </section>
+  );
+}
+
+const SOURCE_LABEL: Record<string, string> = { COMPLIMENTARY: "Free", CASH: "Cash" };
 const STATUS_LABEL: Record<string, string> = { ISSUED: "Not yet in", CHECKED_IN: "Checked in", CANCELLED: "Cancelled", REFUNDED: "Refunded" };
 const RESULT_LABEL: Record<string, string> = {
   SUCCESS: "Let in", ALREADY_USED: "Already used", WRONG_EVENT: "Wrong event", CANCELLED: "Cancelled ticket", REFUNDED: "Refunded ticket", INVALID: "Not a ticket",
@@ -350,7 +409,7 @@ function AttendeeList({ eventId }: { eventId: string }) {
           {list.data.items.length === 0 && <p className="empty">No one matches.</p>}
           {list.data.items.map((a) => (
             <div className="tr" key={a.serial} style={{ gridTemplateColumns: cols }}>
-              <span><span className="name">{a.attendee_name || a.customer_name || "—"}</span><br /><span className="small">{a.booking_reference}</span></span>
+              <span><span className="name">{a.attendee_name || a.customer_name || "—"}</span>{a.source && a.source !== "ONLINE" && <span className="tag">{SOURCE_LABEL[a.source]}</span>}<br /><span className="small">{a.booking_reference}</span></span>
               <span>{a.ticket_type}<br /><span className="small">{a.serial}</span></span>
               <span style={{ overflowWrap: "anywhere" }}>{a.customer_email}</span>
               <span>{STATUS_LABEL[a.status] ?? a.status}{a.checked_in_at ? <><br /><span className="small">{when(a.checked_in_at)}</span></> : null}</span>

@@ -40,6 +40,14 @@ class ReservationStatus(StrEnum):
     RELEASED = "RELEASED"
 
 
+class BookingSource(StrEnum):
+    """How a booking came to exist."""
+
+    ONLINE = "ONLINE"  # bought through the website and paid through the gateway
+    COMPLIMENTARY = "COMPLIMENTARY"  # issued free by an administrator
+    CASH = "CASH"  # paid in cash and recorded by an administrator
+
+
 class BookingStatus(StrEnum):
     PENDING = "PENDING"
     CONFIRMED = "CONFIRMED"
@@ -81,6 +89,7 @@ def _pg_enum(enum_cls: type[StrEnum], name: str) -> Enum:
 
 reservation_status_enum = _pg_enum(ReservationStatus, "reservation_status")
 booking_status_enum = _pg_enum(BookingStatus, "booking_status")
+booking_source_enum = _pg_enum(BookingSource, "booking_source")
 payment_status_enum = _pg_enum(PaymentStatus, "payment_status")
 refund_status_enum = _pg_enum(RefundStatus, "refund_status")
 refund_reason_enum = _pg_enum(RefundReason, "refund_reason")
@@ -177,6 +186,17 @@ class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     cancellation_reason: Mapped[str | None] = mapped_column(String(500))
 
     customer_note: Mapped[str | None] = mapped_column(Text)
+
+    source: Mapped[BookingSource] = mapped_column(
+        booking_source_enum,
+        nullable=False,
+        default=BookingSource.ONLINE,
+        server_default=BookingSource.ONLINE.value,
+    )
+    # Who recorded it, for bookings that were not made online.
+    issued_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
 
     items: Mapped[list[BookingItem]] = relationship(
         back_populates="booking", cascade="all, delete-orphan", lazy="selectin"

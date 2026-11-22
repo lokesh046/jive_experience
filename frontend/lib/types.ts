@@ -108,9 +108,12 @@ export interface BookingItem {
   line_total_paise: number;
 }
 
+export type BookingSource = "ONLINE" | "COMPLIMENTARY" | "CASH";
+
 export interface Booking {
   id: string;
   reference: string;
+  source?: BookingSource;
   event_id: string;
   status: BookingStatus;
   quantity: number;
@@ -320,7 +323,7 @@ export interface SalesReport {
 export interface AttendeeRow {
   serial: string; ticket_type: string; status: "ISSUED" | "CHECKED_IN" | "CANCELLED" | "REFUNDED";
   attendee_name: string | null; customer_name: string | null; customer_email: string;
-  booking_reference: string; checked_in_at: string | null;
+  booking_reference: string; source?: BookingSource; checked_in_at: string | null;
 }
 export interface ScanRow {
   scanned_at: string; result: "SUCCESS" | "ALREADY_USED" | "WRONG_EVENT" | "CANCELLED" | "REFUNDED" | "INVALID";
