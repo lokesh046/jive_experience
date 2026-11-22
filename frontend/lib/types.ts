@@ -42,6 +42,13 @@ export interface TicketCategoryPublic {
   is_sold_out: boolean;
 }
 
+export interface Performer {
+  name: string;
+  role: string | null;
+  photo_url: string | null;
+  performs_at: string | null;
+}
+
 export interface EventDetail {
   id: string;
   slug: string;
@@ -61,6 +68,7 @@ export interface EventDetail {
   thumbnail_image_url: string | null;
   gallery_image_urls: string[];
   ticket_categories: TicketCategoryPublic[];
+  lineup: Performer[];
   max_tickets_per_customer: number;
   requires_attendee_name: boolean;
   cancellation_policy: Record<string, unknown> | null;
@@ -238,6 +246,7 @@ export interface EventAdmin {
   banner_image_url: string | null;
   thumbnail_image_url: string | null;
   gallery_image_urls: string[];
+  performers: (Performer & { id: string })[];
   max_tickets_per_customer: number;
   requires_attendee_name: boolean;
   terms_and_conditions: string | null;

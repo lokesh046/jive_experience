@@ -240,6 +240,44 @@ class EventListItem(BaseModel):
     is_sold_out: bool
 
 
+class PerformerIn(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    role: Annotated[str | None, Field(default=None, max_length=200)] = None
+    photo_url: Annotated[str | None, Field(default=None, max_length=1024)] = None
+    performs_at: datetime | None = None
+
+    @field_validator("name", "role", "photo_url", mode="before")
+    @classmethod
+    def _strip(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+
+class LineupReplace(BaseModel):
+    """The whole lineup, in running order. Replaces whatever was there."""
+
+    performers: Annotated[list[PerformerIn], Field(max_length=20)]
+
+
+class PerformerOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    role: str | None = None
+    photo_url: str | None = None
+    performs_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class PerformerPublic(BaseModel):
+    name: str
+    role: str | None = None
+    photo_url: str | None = None
+    performs_at: datetime | None = None
+
+
 class EventDetail(BaseModel):
     """Full public detail page."""
 
@@ -261,6 +299,7 @@ class EventDetail(BaseModel):
     thumbnail_image_url: str | None = None
     gallery_image_urls: list[str] = Field(default_factory=list)
     ticket_categories: list[TicketCategoryPublic] = Field(default_factory=list)
+    lineup: list[PerformerPublic] = Field(default_factory=list)
     max_tickets_per_customer: int
     requires_attendee_name: bool
     cancellation_policy: dict[str, Any] | None = None
@@ -295,6 +334,7 @@ class EventAdminDetail(BaseModel):
     cancellation_reason: str | None = None
     created_at: datetime
     ticket_categories: list[TicketCategoryAdmin] = Field(default_factory=list)
+    performers: list[PerformerOut] = Field(default_factory=list)
 
     # Validated directly from the `Event` ORM row, unlike the public shapes
     # which are built from cached dictionaries. Without this every admin event

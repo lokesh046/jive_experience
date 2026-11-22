@@ -135,6 +135,12 @@ class Event(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="event", cascade="all, delete-orphan", lazy="selectin"
     )
     venue: Mapped[Venue] = relationship(lazy="joined")
+    performers: Mapped[list[EventPerformer]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="EventPerformer.sort_order",
+    )
 
     __table_args__ = (
         CheckConstraint("ends_at IS NULL OR ends_at >= starts_at", name="ends_after_start"),
@@ -212,3 +218,27 @@ class TicketCategory(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     @property
     def available(self) -> int:
         return self.capacity - self.sold_count - self.reserved_count
+
+
+class EventPerformer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Someone on the bill for an event: shown on the event page as the lineup.
+
+    The lineup is edited as a whole list (see `CatalogueService.replace_lineup`),
+    so `sort_order` is simply the position in that list.
+    """
+
+    __tablename__ = "event_performers"
+
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    role: Mapped[str | None] = mapped_column(String(200))
+    photo_url: Mapped[str | None] = mapped_column(String(1024))
+    # When they go on. Optional: a lineup can be announced before the times.
+    performs_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    event: Mapped[Event] = relationship(back_populates="performers")
+
+    __table_args__ = (Index("ix_event_performers_event_id_sort_order", "event_id", "sort_order"),)

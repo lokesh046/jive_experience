@@ -26,6 +26,8 @@ from app.schemas.catalogue import (
     EventCancelRequest,
     EventCreate,
     EventUpdate,
+    LineupReplace,
+    PerformerOut,
     TicketCategoryAdmin,
     TicketCategoryCreate,
     TicketCategoryUpdate,
@@ -225,6 +227,25 @@ async def delete_ticket_category(
     """A category with sales is deactivated instead — deleting it would break
     the record of what customers bought."""
     await service.delete_category(category_id, actor=actor)
+
+
+# ------------------------------------------------------------------ lineup ---
+
+
+@router.put(
+    "/events/{event_id}/lineup",
+    response_model=list[PerformerOut],
+    summary="Set the event lineup",
+)
+async def replace_event_lineup(
+    event_id: uuid.UUID,
+    payload: LineupReplace,
+    actor: RequireAdmin,
+    service: CatalogueServiceDep,
+) -> list[PerformerOut]:
+    """The full list, in running order (up to 20). It replaces the current one."""
+    event = await service.replace_lineup(event_id, payload, actor=actor)
+    return [PerformerOut.model_validate(p) for p in event.performers]
 
 
 # ------------------------------------------------------------------ uploads ---

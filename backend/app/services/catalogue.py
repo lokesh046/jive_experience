@@ -24,6 +24,7 @@ from app.models.event import (
     PUBLIC_EVENT_STATUSES,
     Event,
     EventCategory,
+    EventPerformer,
     EventStatus,
     TicketCategory,
 )
@@ -42,6 +43,7 @@ from app.schemas.catalogue import (
     EventAvailability,
     EventCreate,
     EventUpdate,
+    LineupReplace,
     TicketCategoryCreate,
     TicketCategoryUpdate,
     VenueCreate,
@@ -584,6 +586,41 @@ class CatalogueService:
             slug=event.slug if event else None, event_id=str(event_id)
         )
 
+    # ------------------------------------------------------------ lineup ---
+
+    async def replace_lineup(
+        self, event_id: uuid.UUID, payload: LineupReplace, *, actor: User
+    ) -> Event:
+        """Set the whole lineup, in running order.
+
+        Replacing the list in one transaction (rather than add/edit/remove
+        calls) keeps the order and the content consistent however the admin
+        rearranged it, and a failed save changes nothing.
+        """
+        event = await self.events.get_or_fail(event_id)
+        before = len(event.performers)
+        event.performers = [
+            EventPerformer(
+                name=p.name,
+                role=p.role,
+                photo_url=p.photo_url,
+                performs_at=p.performs_at,
+                sort_order=position,
+            )
+            for position, p in enumerate(payload.performers)
+        ]
+        await self.audit.record(
+            "event.lineup_replaced",
+            entity_type="event",
+            entity_id=event.id,
+            actor=actor,
+            before={"performers": before},
+            after={"performers": len(payload.performers)},
+        )
+        await self.session.commit()
+        await self.cache.invalidate_event(slug=event.slug, event_id=str(event_id))
+        return await self.admin_event(event_id)
+
     # ------------------------------------------------------ serialisation ---
 
     @staticmethod
@@ -671,6 +708,15 @@ class CatalogueService:
                 }
                 for c in sorted(event.ticket_categories, key=lambda c: c.sort_order)
                 if c.is_active
+            ],
+            "lineup": [
+                {
+                    "name": p.name,
+                    "role": p.role,
+                    "photo_url": p.photo_url,
+                    "performs_at": p.performs_at.isoformat() if p.performs_at else None,
+                }
+                for p in event.performers
             ],
             "max_tickets_per_customer": event.max_tickets_per_customer,
             "requires_attendee_name": event.requires_attendee_name,

@@ -19,7 +19,7 @@ from app.models.commerce import (  # noqa: F401
     Refund,
     TicketReservation,
 )
-from app.models.event import Event, TicketCategory  # noqa: F401
+from app.models.event import Event, EventPerformer, TicketCategory  # noqa: F401
 from app.models.fulfilment import (  # noqa: F401
     OutboxMessage,
     StaffEventAssignment,

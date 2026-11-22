@@ -472,3 +472,21 @@ select option { background: #111; }
   .rt-stub::before, .rt-stub::after { top: -22px; bottom: auto; transform: none; }
   .rt-stub::before { left: -22px; } .rt-stub::after { right: -22px; left: auto; }
 }
+
+/* lineup editor (admin) */
+.lu-edit { list-style: none; display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; }
+.lu-edit > li { display: grid; grid-template-columns: 96px 1fr auto; gap: 20px; align-items: start; padding: 20px 0; border-bottom: 1px solid var(--line); }
+.lu-pic { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.lu-pic img, .lu-pic > span { width: 80px; height: 100px; border-radius: 14px; object-fit: cover; background: var(--surface); display: grid; place-items: center; color: var(--mute); font: 400 28px var(--font-serif), serif; }
+.lu-pic label { font-size: 13px; cursor: pointer; }
+.lu-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+.lu-ctl { display: flex; flex-direction: column; gap: 6px; }
+.lu-ctl button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--field); background: none; color: var(--fg); cursor: pointer; }
+.lu-ctl button:disabled { opacity: 0.35; cursor: default; }
+@media (max-width: 760px) { .lu-edit > li { grid-template-columns: 1fr; } .lu-fields { grid-template-columns: 1fr; } .lu-ctl { flex-direction: row; } }
+/* lineup (public) */
+.lineup .artists { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 32px; }
+.lineup .artists .ph { margin-bottom: 14px; }
+.lineup .artists .ph.none { display: grid; place-items: center; font: 400 64px var(--font-serif), serif; color: var(--mute); }
+.lineup .artists .at { display: block; font: 500 12px/1 var(--font-sans), sans-serif; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg); margin-bottom: 8px; }
+@media (max-width: 560px) { .lineup .artists { grid-template-columns: repeat(2, 1fr); gap: 16px; } .lineup .artists h3 { font-size: 20px; } }

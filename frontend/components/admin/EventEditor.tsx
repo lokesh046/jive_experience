@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ApiError, api } from "@/lib/api-client";
 import { CATEGORIES, fromIst, label, rupees, toIst, toPaise } from "@/lib/admin";
+import { LineupEditor } from "@/components/admin/LineupEditor";
 import { GalleryField } from "@/components/admin/GalleryField";
 import { PhotoField } from "@/components/admin/PhotoField";
 import { useData } from "@/lib/use-data";
@@ -110,6 +111,7 @@ export function EventEditor({ eventId }: { eventId?: string }) {
       </form>
 
       {event && <Categories event={event} onChange={ev.reload} />}
+      {event && <LineupEditor event={event} onSaved={ev.reload} />}
       {event && <Staff eventId={event.id} />}
       {event && <AttendanceBlock eventId={event.id} />}
     </>

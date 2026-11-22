@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { Lineup } from "@/components/Lineup";
 import { EventGallery } from "@/components/EventGallery";
 import { TicketPicker } from "@/components/TicketPicker";
 import { getEvent, getEvents } from "@/lib/catalogue";
@@ -62,6 +63,7 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
     },
     image: [e.banner_image_url, e.thumbnail_image_url].filter(Boolean),
     organizer: { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
+    ...(e.lineup.length ? { performer: e.lineup.map((p) => ({ "@type": "PerformingGroup", name: p.name })) } : {}),
     offers: e.ticket_categories.map((c) => ({
       "@type": "Offer",
       name: c.name,
@@ -105,6 +107,8 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
           {e.venue.directions && <p>{e.venue.directions}</p>}
           {e.venue.map_url && <p><a className="link" href={e.venue.map_url} rel="noopener noreferrer" target="_blank">Open in maps</a></p>}
         </div>
+
+        <Lineup performers={e.lineup} zone={e.timezone} eventStart={e.starts_at} />
 
         <section id="tickets" style={{ paddingTop: 96 }}>
           <h2>Tickets</h2>

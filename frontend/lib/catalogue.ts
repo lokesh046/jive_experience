@@ -40,3 +40,22 @@ export async function getEvent(slug: string): Promise<EventDetail | null> {
     return null;
   }
 }
+
+export interface Artist { name: string; note: string; img: string; slug: string }
+
+/** Performers with a photo across the upcoming events, for the homepage: one card per person, soonest event first. */
+export async function getArtists(events: EventListItem[]): Promise<Artist[]> {
+  const details = await Promise.all(events.slice(0, 8).map((e) => getEvent(e.slug)));
+  const seen = new Set<string>();
+  const out: Artist[] = [];
+  for (const d of details) {
+    for (const p of d?.lineup ?? []) {
+      if (!p.photo_url) continue; // the homepage cards are photo-led
+      const key = p.name.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ name: p.name, note: p.role ?? "", img: p.photo_url, slug: d!.slug });
+    }
+  }
+  return out.slice(0, 8);
+}

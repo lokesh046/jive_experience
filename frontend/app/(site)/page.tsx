@@ -6,7 +6,7 @@ import { EventCard } from "@/components/EventCard";
 import { Photo } from "@/components/Photo";
 import { Ticker } from "@/components/Ticker";
 import { ARCHIVE, ARTISTS, PRIVATE_SERVICES } from "@/lib/content";
-import { getEvents } from "@/lib/catalogue";
+import { getArtists, getEvents } from "@/lib/catalogue";
 import { CONTACT_EMAIL, SITE_NAME, SITE_URL } from "@/lib/config";
 import { longDate } from "@/lib/format";
 
@@ -18,6 +18,9 @@ export const metadata: Metadata = {
 
 async function HomeContent() {
   const events = await getEvents();
+  // Real performers once admins add lineups; until then the placeholder artists keep the section filled.
+  const real = await getArtists(events);
+  const artists = real.length ? real : ARTISTS.map((a) => ({ name: a.name, note: a.note, img: a.img, slug: "" }));
   // The banner shows the soonest event an admin marked "Show in the homepage banner", or simply the soonest.
   const next = events.find((e) => e.is_featured) ?? events[0];
 
@@ -68,10 +71,10 @@ async function HomeContent() {
         <div className="wrap">
           <h2>Artists</h2>
           <div className="artists">
-            {ARTISTS.map((a) => (
+            {artists.map((a) => (
               <div key={a.name}>
                 <div className="ph"><Photo src={a.img} alt="" sizes="(max-width: 820px) 50vw, 240px" priority={false} /></div>
-                <h3>{a.name}</h3>
+                <h3>{a.slug ? <Link href={`/events/${a.slug}`}>{a.name}</Link> : a.name}</h3>
                 <p>{a.note}</p>
               </div>
             ))}
