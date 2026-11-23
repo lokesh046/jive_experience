@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Photo } from "@/components/Photo";
 import { ApiError, api, rememberNext } from "@/lib/api-client";
 import { eventsById } from "@/lib/events-index";
 import { dayMonth, inr } from "@/lib/format";
@@ -46,6 +47,7 @@ export function MyTickets() {
     <main className="page">
       <div className="wrap">
         <h1>My tickets</h1>
+        <p className="sub" style={{ margin: "12px 0 0" }}>{rows === null ? " " : rows.length === 0 ? "Your bookings will appear here." : `${rows.length} booking${rows.length === 1 ? "" : "s"}`}</p>
         <div className="tabs" role="tablist" aria-label="Bookings">
           <button role="tab" type="button" aria-selected={tab === "up"} onClick={() => setTab("up")}>Upcoming</button>
           <button role="tab" type="button" aria-selected={tab === "past"} onClick={() => setTab("past")}>Past</button>
@@ -55,23 +57,34 @@ export function MyTickets() {
         {rows && shown.length === 0 && (
           <p className="empty">{tab === "up" ? <>Nothing booked yet. <Link className="link" href="/#events">See what is on</Link>.</> : "No past bookings."}</p>
         )}
-        {shown.map((b) => {
-          const ev = events.get(b.event_id);
-          const href = b.status === "PENDING" ? `/checkout/${b.reference}` : `/tickets/${b.reference}`;
-          return (
-            <Link className="bk" href={href} key={b.id}>
-              <div className="d">{ev ? dayMonth(ev.starts_at, ev.timezone) : b.reference}</div>
-              <div>
-                <h3>{ev?.title ?? "Booking"}</h3>
-                {ev && <p className="small" style={{ marginTop: 4 }}>{ev.venue_name}, {ev.city}</p>}
-                <ul className="cats" aria-label="Ticket types">
-                  {b.items.map((i) => <li key={i.ticket_category_id}><b>{i.category_name}</b> × {i.quantity}</li>)}
-                </ul>
-              </div>
-              <div className="r">{inr(b.total_paise)}<span>{LABEL[b.status] ?? b.status}</span></div>
-            </Link>
-          );
-        })}
+        <div className="mt-list">
+          {shown.map((b) => {
+            const ev = events.get(b.event_id);
+            const pending = b.status === "PENDING";
+            const href = pending ? `/checkout/${b.reference}` : `/tickets/${b.reference}`;
+            const tone = b.status === "CONFIRMED" || b.status === "PARTIALLY_REFUNDED" ? "good" : pending ? "wait" : "off";
+            return (
+              <Link className="mt-card" href={href} key={b.id}>
+                <div className="mt-img">
+                  {ev?.thumbnail_image_url && <Photo src={ev.thumbnail_image_url} alt="" sizes="(max-width: 700px) 100vw, 220px" />}
+                  <span className="mt-date">{ev ? dayMonth(ev.starts_at, ev.timezone) : b.reference}</span>
+                </div>
+                <div className="mt-body">
+                  <span className={`chip ${tone}`}>{LABEL[b.status] ?? b.status}</span>
+                  <h3>{ev?.title ?? "Booking"}</h3>
+                  {ev && <p className="small">{ev.venue_name}, {ev.city}</p>}
+                  <ul className="cats" aria-label="Ticket types">
+                    {b.items.map((i) => <li key={i.ticket_category_id}><b>{i.category_name}</b> × {i.quantity}</li>)}
+                  </ul>
+                </div>
+                <div className="mt-side">
+                  <strong>{inr(b.total_paise)}</strong>
+                  <span className="mt-go">{pending ? "Complete payment" : "View tickets"} <i aria-hidden="true">→</i></span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </main>
   );
