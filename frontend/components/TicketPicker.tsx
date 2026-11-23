@@ -5,6 +5,7 @@ import { ApiError, api, rememberNext } from "@/lib/api-client";
 import { inr } from "@/lib/format";
 import { isPremiumType } from "@/lib/premium";
 import { TicketPreview } from "@/components/TicketPreview";
+import { ArrowButton } from "@/components/ArrowButton";
 import { CheckoutFlow, type EventSummary } from "@/app/(site)/checkout/[reference]/CheckoutFlow";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import type { Availability, Booking, PromoCheck, TicketCategoryPublic } from "@/lib/types";
@@ -238,9 +239,9 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
           )}
           {promoErr && promo === null && !promoText && <p className="err" role="alert">{promoErr}</p>}
           <div className="total"><span className="small">Total</span><strong>{inr(total)}</strong></div>
-          <button className="pill full" type="button" disabled={!current || count < 1 || busy} onClick={checkout}>
+          <ArrowButton full disabled={!current || count < 1 || busy} onClick={checkout}>
             {busy ? "Reserving…" : "Continue to checkout"}
-          </button>
+          </ArrowButton>
           {error && <p className="err" role="alert">{error}</p>}
         </div>
       </div>

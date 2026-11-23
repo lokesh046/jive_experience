@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ArchiveMorph } from "@/components/ArchiveMorph";
+import { ArrowButton } from "@/components/ArrowButton";
 import { EnquiryForm } from "@/components/EnquiryForm";
 import { EventCard } from "@/components/EventCard";
 import { Photo } from "@/components/Photo";
@@ -48,9 +49,9 @@ async function HomeContent() {
               : "Intimate nights in converted mills, vaults and warehouses."}
           </p>
           <div className="hero-actions">
-            <Link className="pill" href={next ? `/events/${next.slug}` : "#events"}>
+            <ArrowButton href={next ? `/events/${next.slug}` : "#events"}>
               {next ? (next.starting_price_paise ? `Get tickets · from ${inr(next.starting_price_paise)}` : "Get tickets") : "See what is on"}
-            </Link>
+            </ArrowButton>
             {next && events.length > 1 && <Link className="pill ghost" href="#events">See all nights</Link>}
           </div>
         </div>

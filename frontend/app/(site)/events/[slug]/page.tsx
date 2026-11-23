@@ -9,6 +9,7 @@ import { Lineup } from "@/components/Lineup";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import { VenueDetails } from "@/components/VenueDetails";
 import { EventGallery } from "@/components/EventGallery";
+import { ArrowButton } from "@/components/ArrowButton";
 import { StickyBuy } from "@/components/StickyBuy";
 import { TicketPicker } from "@/components/TicketPicker";
 import { getEvent, getEvents } from "@/lib/catalogue";
@@ -99,7 +100,7 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
           <p className="small">{e.venue.name}, {e.venue.city}</p>
           {e.is_past && !cancelled && <p className="past-tag">Past event</p>}
           <div className="ev-actions">
-            <Link className="pill" href={e.is_past ? "/events" : "#tickets"}>{e.is_past ? "See upcoming events" : e.on_sale ? "Get tickets" : "See details"}</Link>
+            <ArrowButton href={e.is_past ? "/events" : "#tickets"}>{e.is_past ? "See upcoming events" : e.on_sale ? "Get tickets" : "See details"}</ArrowButton>
             {!e.is_past && <AddToCalendar event={{ id: e.id, slug: e.slug, title: e.title, subtitle: e.subtitle, starts_at: e.starts_at, ends_at: e.ends_at, where: [e.venue.name, e.venue.address_line1, e.venue.city, e.venue.state, e.venue.postal_code].filter(Boolean).join(", "), url: `${SITE_URL}/events/${e.slug}` }} />}
           </div>
         </header>

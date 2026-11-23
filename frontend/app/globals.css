@@ -823,3 +823,18 @@ footer.site .wrap { flex-wrap: wrap; }
 /* homepage */
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; }
+
+/* Arrow pill: the disc on the right grows to fill the button on hover */
+.pill.go { --disc: 34px; --pad: 6px; position: relative; overflow: hidden; height: 50px; padding: 0 calc(var(--disc) + var(--pad) + 18px) 0 26px; isolation: isolate; transition: opacity 0.2s; }
+.pill.go:hover, .pill.go:focus-visible { background: var(--fg); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7); }
+.pill.go[disabled]:hover { box-shadow: none; }
+.pill.go::before { content: ""; position: absolute; z-index: 0; background: #000; border-radius: 999px; inset: var(--pad) var(--pad) var(--pad) calc(100% - var(--disc) - var(--pad)); transition: inset 0.45s cubic-bezier(0.785, 0.135, 0.15, 0.86); }
+.pill.go:hover::before, .pill.go:focus-visible::before { inset: 0; }
+.pill.go .go-t { position: relative; z-index: 1; white-space: nowrap; transition: color 0.3s 0.1s; }
+.pill.go:hover .go-t, .pill.go:focus-visible .go-t { color: #fff; }
+.pill.go .go-a { position: absolute; z-index: 1; right: var(--pad); top: 50%; width: var(--disc); height: var(--disc); margin-top: calc(var(--disc) / -2); display: grid; place-items: center; color: #fff; transition: transform 0.45s cubic-bezier(0.785, 0.135, 0.15, 0.86); }
+.pill.go:hover .go-a { transform: translateX(-2px); }
+.pill.go[disabled]::before, .pill.go[disabled]:hover::before { inset: var(--pad) var(--pad) var(--pad) calc(100% - var(--disc) - var(--pad)); }
+.pill.go[disabled]:hover .go-t { color: #000; }
+.pill.go.full { justify-content: flex-start; }
+@media (prefers-reduced-motion: reduce) { .pill.go::before, .pill.go .go-a, .pill.go .go-t { transition: none; } }

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowButton } from "@/components/ArrowButton";
 import { ApiError, api, rememberNext } from "@/lib/api-client";
 import { eventsById } from "@/lib/events-index";
 import { inr, longDate, timeOf } from "@/lib/format";
@@ -175,7 +176,7 @@ export function CheckoutFlow({
                     {user.phone_e164 && <div><span className="name">Mobile</span><span>{user.phone_e164}</span></div>}
                   </div>
                 )}
-                <button className="pill full" type="button" onClick={pay} disabled={busy}>{busy ? "Opening payment…" : `Pay ${inr(booking.total_paise)}`}</button>
+                <ArrowButton full onClick={pay} disabled={busy}>{busy ? "Opening payment…" : `Pay ${inr(booking.total_paise)}`}</ArrowButton>
                 {error && <p className="err" role="alert">{error}</p>}
                 <p className="small" style={{ marginTop: 18 }}>By paying you accept the <Link className="link" href="/cancellation-policy">cancellation and refund policy</Link>.</p>
               </>
