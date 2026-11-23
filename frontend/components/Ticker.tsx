@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { TickerShell } from "@/components/TickerShell";
 import { dayMonth } from "@/lib/format";
 import type { EventListItem } from "@/lib/types";
 
-/** A scrolling strip of what is on. Each item links to its event; it pauses while hovered or focused. */
+/** A scrolling strip of what is on. Each item links to its event; it speeds up on hover and pauses on focus. */
 export function Ticker({ events }: { events: EventListItem[] }) {
   if (events.length === 0) return null;
   const shown = events.slice(0, 8);
@@ -23,13 +24,13 @@ export function Ticker({ events }: { events: EventListItem[] }) {
     </div>
   );
   return (
-    <div className="ticker" role="region" aria-label="Events on now">
+    <TickerShell>
       <div className="view">
         <div className="track">
           {strip(false)}
           {strip(true)}
         </div>
       </div>
-    </div>
+    </TickerShell>
   );
 }

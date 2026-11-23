@@ -78,9 +78,9 @@ section.block { padding-top: 112px; }
 
 /* ticker: the only uppercase italic on the site */
 .ticker { display: flex; align-items: center; height: 56px; border-block: 1px solid var(--line); overflow: hidden; }
-.ticker .view { overflow: hidden; flex: 1; }
-.track { display: flex; width: max-content; animation: slide 32s linear infinite; }
-.ticker:hover .track, .ticker:focus-within .track { animation-play-state: paused; }
+.ticker .view { overflow: hidden; flex: 1; -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent); }
+.track { display: flex; width: max-content; animation: slide 70s linear infinite reverse; }
+.ticker:focus-within .track { animation-play-state: paused; }
 .track > div { display: flex; align-items: center; }
 .track span { font: italic 700 17px/1 var(--font-display), sans-serif; text-transform: uppercase; letter-spacing: 0.02em; color: var(--fg); white-space: nowrap; }
 .track a { display: inline-flex; align-items: baseline; gap: 10px; }
