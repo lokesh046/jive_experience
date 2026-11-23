@@ -36,7 +36,7 @@ export function rememberNext(path: string) {
     sessionStorage.setItem("jive_next", path);
   } catch {}
 }
-export function takeNext(fallback = "/tickets"): string {
+export function takeNext(fallback = "/"): string {
   try {
     const v = sessionStorage.getItem("jive_next");
     sessionStorage.removeItem("jive_next");
