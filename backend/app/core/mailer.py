@@ -72,3 +72,21 @@ async def send_mail(settings: Settings, mail: Mail) -> None:
         raise ServiceUnavailableError(
             "The email could not be sent.", code="EMAIL_SEND_FAILED"
         ) from exc
+
+
+def login_code_mail(*, to: str, code: str, minutes: int) -> Mail:
+    """The one-time sign-in code, kept short and plain so it is easy to read on a phone."""
+    text = (
+        f"Your JIVE sign-in code is {code}.\n\n"
+        f"It works for {minutes} minutes and only once. "
+        "If you did not ask for it, ignore this email."
+    )
+    html = (
+        '<div style="font-family:Arial,sans-serif;max-width:420px;margin:0 auto;padding:24px">'
+        '<p style="font-size:15px;color:#222">Your JIVE sign-in code</p>'
+        '<p style="font-size:34px;letter-spacing:8px;font-weight:700;'
+        f'margin:8px 0 18px;color:#000">{code}</p>'
+        f'<p style="font-size:13px;color:#666">It works for {minutes} minutes and only once. '
+        "If you did not ask for it, you can ignore this email.</p></div>"
+    )
+    return Mail(to=to, subject=f"{code} is your JIVE sign-in code", text=text, html=html)

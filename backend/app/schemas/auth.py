@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from app.models.user import UserRole
 
@@ -25,6 +25,19 @@ class GoogleCallbackRequest(BaseModel):
 
     code: Annotated[str, Field(min_length=10, max_length=2048)]
     state: Annotated[str, Field(min_length=10, max_length=256)]
+
+
+class EmailCodeRequest(BaseModel):
+    email: EmailStr
+
+
+class EmailCodeVerifyRequest(BaseModel):
+    email: EmailStr
+    code: Annotated[str, Field(pattern=r"^\s*\d{6}\s*$")]
+
+
+class EmailCodeResponse(BaseModel):
+    message: str
 
 
 class PhoneNumberRequest(BaseModel):

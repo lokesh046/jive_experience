@@ -11,6 +11,8 @@ decides authority. Nothing in this module can raise a role.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import secrets
 import uuid
@@ -63,6 +65,11 @@ class IssuedTokens:
 
 
 OAUTH_STATE_PREFIX = "oauth:google:state"
+
+EMAIL_CODE_PREFIX = "otp:email"
+EMAIL_CODE_TTL_SECONDS = 600
+EMAIL_CODE_COOLDOWN_SECONDS = 60
+EMAIL_CODE_MAX_ATTEMPTS = 5
 
 
 class AuthService:
@@ -151,6 +158,87 @@ class AuthService:
         if identity.picture:
             user.avatar_url = identity.picture
 
+        issued, _ = await self._issue(user, context=context, new_session=True)
+        return issued
+
+    # ---------------------------------------------------- email code login ---
+
+    @staticmethod
+    def _normalise_email(email: str) -> str:
+        return email.strip().lower()
+
+    def _code_key(self, email: str) -> str:
+        return f"{EMAIL_CODE_PREFIX}:{hashlib.sha256(email.encode()).hexdigest()}"
+
+    def _code_digest(self, email: str, code: str) -> str:
+        secret = self.settings.secret_key.get_secret_value().encode()
+        return hmac.new(secret, f"{email}:{code}".encode(), hashlib.sha256).hexdigest()
+
+    async def request_email_code(self, email: str) -> str | None:
+        """Make a one-time sign-in code for this address, or None when nothing should be sent.
+
+        The caller answers the same way either way, so the response never reveals whether an
+        account exists. Only a keyed hash of the code is stored, it expires in ten minutes,
+        and a new one cannot be requested for a minute.
+        """
+        email = self._normalise_email(email)
+        user = await self.users.by_email(email)
+        if user is not None and user.status is not UserStatus.ACTIVE:
+            return None
+        key = self._code_key(email)
+        if not await self.redis.set(f"{key}:cool", "1", ex=EMAIL_CODE_COOLDOWN_SECONDS, nx=True):
+            return None
+        code = f"{secrets.randbelow(10**6):06d}"
+        await self.redis.set(
+            key,
+            json.dumps({"digest": self._code_digest(email, code), "tries": 0}),
+            ex=EMAIL_CODE_TTL_SECONDS,
+        )
+        return code
+
+    async def verify_email_code(
+        self, email: str, code: str, *, context: RequestContext | None = None
+    ) -> IssuedTokens:
+        """Sign in with the emailed code.
+
+        Proving control of the mailbox is the same assurance Google gives with a verified email,
+        so it links to the existing account for that address (keeping its role) or creates a
+        customer. Five wrong tries burn the code, and a correct one works once.
+        """
+        email = self._normalise_email(email)
+        invalid = AuthenticationError(
+            "That code is wrong or has expired. Request a new one.", code="OTP_INVALID"
+        )
+        key = self._code_key(email)
+        raw = await self.redis.get(key)
+        if raw is None:
+            raise invalid
+        record = json.loads(raw)
+        if record["tries"] >= EMAIL_CODE_MAX_ATTEMPTS:
+            await self.redis.delete(key)
+            raise invalid
+        if not hmac.compare_digest(record["digest"], self._code_digest(email, code.strip())):
+            record["tries"] += 1
+            await self.redis.set(key, json.dumps(record), keepttl=True)
+            raise invalid
+        # Deleting is the single-use guard: of two racing correct submissions only one wins.
+        if await self.redis.delete(key) != 1:
+            raise invalid
+
+        user = await self.users.by_email(email)
+        if user is None:
+            user = User(
+                role=UserRole.CUSTOMER,
+                status=UserStatus.ACTIVE,
+                email=email,
+                email_verified_at=datetime.now(UTC),
+            )
+            self.users.add(user)
+            await self.session.flush()
+            logger.info("customer_registered", user_id=str(user.id), method="email_code")
+        self._assert_account_usable(user)
+        if user.email_verified_at is None:
+            user.email_verified_at = datetime.now(UTC)
         issued, _ = await self._issue(user, context=context, new_session=True)
         return issued
 

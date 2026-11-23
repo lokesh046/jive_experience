@@ -17,7 +17,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
     body: json !== undefined ? JSON.stringify(json) : rest.body,
     cache: "no-store",
   });
-  if (/^\/?auth\/(google\/callback|logout)/.test(path) && typeof window !== "undefined") {
+  if (/^\/?auth\/(google\/callback|email\/verify|logout)/.test(path) && typeof window !== "undefined") {
     // Tell the header the signed-in person changed.
     queueMicrotask(() => window.dispatchEvent(new Event("jive-auth")));
   }

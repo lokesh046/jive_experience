@@ -1,10 +1,48 @@
 "use client";
-import { useState } from "react";
-import { ApiError, api } from "@/lib/api-client";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ApiError, api, takeNext } from "@/lib/api-client";
 
 export default function SignIn() {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [sent, setSent] = useState(false);
+  const [wait, setWait] = useState(0);
+  const [mailBusy, setMailBusy] = useState(false);
+  const [mailError, setMailError] = useState<string | null>(null);
+
+  // Resend is allowed once a minute, matching the server.
+  useEffect(() => {
+    if (wait <= 0) return;
+    const id = setTimeout(() => setWait((w) => w - 1), 1000);
+    return () => clearTimeout(id);
+  }, [wait]);
+
+  async function sendCode(e?: React.FormEvent) {
+    e?.preventDefault();
+    setMailBusy(true); setMailError(null);
+    try {
+      await api("auth/email/request", { method: "POST", json: { email: email.trim() } });
+      setSent(true); setWait(60); setCode("");
+    } catch (err) {
+      setMailError(err instanceof ApiError ? (err.status === 429 ? "Too many attempts. Please wait a few minutes." : err.message) : "We could not send the code. Please try again.");
+    } finally { setMailBusy(false); }
+  }
+
+  async function verify(e: React.FormEvent) {
+    e.preventDefault();
+    setMailBusy(true); setMailError(null);
+    try {
+      await api("auth/email/verify", { method: "POST", json: { email: email.trim(), code: code.trim() } });
+      router.replace(takeNext());
+    } catch (err) {
+      setMailBusy(false);
+      setMailError(err instanceof ApiError ? err.message : "Sign-in did not complete. Please try again.");
+    }
+  }
 
   async function go() {
     setBusy(true);
@@ -29,6 +67,34 @@ export default function SignIn() {
         </button>
         {error && <p className="err" role="alert">{error}</p>}
         <p className="small" style={{ marginTop: 24 }}>We never see your Google password.</p>
+
+        <div className="or" role="separator"><span>or</span></div>
+
+        {!sent ? (
+          <form className="otp" onSubmit={sendCode}>
+            <div className="f">
+              <label htmlFor="otp-e">Email address</label>
+              <input id="otp-e" type="email" required autoComplete="email" inputMode="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <button className="pill ghost full" type="submit" disabled={mailBusy || !email.trim()}>{mailBusy ? "Sending…" : "Email me a code"}</button>
+            {mailError && <p className="err" role="alert">{mailError}</p>}
+          </form>
+        ) : (
+          <form className="otp" onSubmit={verify}>
+            <p aria-live="polite">We sent a 6-digit code to <b style={{ color: "var(--fg)" }}>{email.trim()}</b>. It works for 10 minutes.</p>
+            <div className="f">
+              <label htmlFor="otp-c">Code</label>
+              <input id="otp-c" className="otp-code" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required placeholder="123456" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} autoFocus />
+            </div>
+            <button className="pill full" type="submit" disabled={mailBusy || code.length !== 6}>{mailBusy ? "Checking…" : "Sign in"}</button>
+            {mailError && <p className="err" role="alert">{mailError}</p>}
+            <p className="small">
+              <button type="button" className="link" onClick={() => void sendCode()} disabled={wait > 0 || mailBusy}>{wait > 0 ? `Send a new code in ${wait}s` : "Send a new code"}</button>
+              {" · "}
+              <button type="button" className="link" onClick={() => { setSent(false); setCode(""); setMailError(null); }}>Use a different email</button>
+            </p>
+          </form>
+        )}
       </div>
     </main>
   );

@@ -98,7 +98,7 @@ async function HomeContent() {
       </section>
 
       <section className="block" id="private">
-        <div className="wrap narrow">
+        <div className="wrap">
           <h2>Private bookings</h2>
           <p style={{ marginTop: 24 }}>
             Our rooms are available for private listening sessions, brand showcases and table reservations.

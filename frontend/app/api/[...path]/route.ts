@@ -10,6 +10,8 @@ import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { API_V1 } from "@/lib/config";
 
+// Routes that end in a new session: the tokens go into cookies, never to the page.
+const SIGN_IN = new Set(["auth/google/callback", "auth/email/verify"]);
 const ACCESS = "jive_at";
 const REFRESH = "jive_rt";
 const REFRESH_DAYS = 30;
@@ -116,7 +118,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   try {
     upstream = await call(url, req, body, access);
     // Expired access token: refresh once and retry once.
-    if (upstream.status === 401 && refresh && joined !== "auth/google/callback") {
+    if (upstream.status === 401 && refresh && !SIGN_IN.has(joined)) {
       rotated = await refreshTokens(refresh);
       if (rotated) {
         access = rotated.access_token;
@@ -131,7 +133,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   }
 
   // Sign-in: keep the tokens in cookies and hand the page only the user.
-  if (joined === "auth/google/callback" && upstream.ok) {
+  if (SIGN_IN.has(joined) && upstream.ok) {
     const pair = (await upstream.json()) as TokenPair;
     const res = NextResponse.json({ user: pair.user }, { headers: { "cache-control": "no-store" } });
     setSession(res, pair);

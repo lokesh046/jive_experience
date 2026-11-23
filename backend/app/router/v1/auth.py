@@ -14,9 +14,13 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+import structlog
+from fastapi import APIRouter, BackgroundTasks, Query, status
 
+from app.core import mailer
+from app.core.config import Environment
 from app.dependencies import (
+    AppSettings,
     AuthServiceDep,
     CurrentUser,
     OAuthRateLimit,
@@ -25,6 +29,9 @@ from app.dependencies import (
 )
 from app.schemas.auth import (
     AuthenticatedUser,
+    EmailCodeRequest,
+    EmailCodeResponse,
+    EmailCodeVerifyRequest,
     GoogleAuthorizationResponse,
     GoogleCallbackRequest,
     LogoutRequest,
@@ -34,6 +41,7 @@ from app.schemas.auth import (
 )
 
 router = APIRouter(tags=["auth"])
+logger = structlog.get_logger(__name__)
 
 
 # ----------------------------------------------------------- Google sign-in ---
@@ -85,6 +93,54 @@ async def google_callback(
     issued = await service.complete_google_sign_in(
         code=payload.code, state=payload.state, context=context
     )
+    return TokenPair.from_issued(issued)
+
+
+# ------------------------------------------------------- email code sign-in ---
+
+
+@router.post(
+    "/email/request",
+    response_model=EmailCodeResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Email a one-time sign-in code",
+    dependencies=[OAuthRateLimit],
+)
+async def email_code_request(
+    payload: EmailCodeRequest,
+    service: AuthServiceDep,
+    settings: AppSettings,
+    background: BackgroundTasks,
+) -> EmailCodeResponse:
+    """Always answers the same way, so it cannot be used to find out who has an account."""
+    code = await service.request_email_code(str(payload.email))
+    if code is not None:
+        if settings.email_configured:
+            background.add_task(_send_code, settings, str(payload.email).strip().lower(), code)
+        elif settings.environment in (Environment.LOCAL, Environment.TEST):
+            logger.warning("email_code_not_sent_no_smtp", email=str(payload.email), code=code)
+    return EmailCodeResponse(message="If that address can sign in, a code is on its way.")
+
+
+async def _send_code(settings: AppSettings, to: str, code: str) -> None:
+    try:
+        await mailer.send_mail(settings, mailer.login_code_mail(to=to, code=code, minutes=10))
+    except Exception:  # the person just asks for another code
+        logger.exception("login_code_email_failed")
+
+
+@router.post(
+    "/email/verify",
+    response_model=TokenPair,
+    summary="Sign in with the emailed code",
+    dependencies=[OAuthRateLimit],
+)
+async def email_code_verify(
+    payload: EmailCodeVerifyRequest,
+    service: AuthServiceDep,
+    context: RequestContextDep,
+) -> TokenPair:
+    issued = await service.verify_email_code(str(payload.email), payload.code, context=context)
     return TokenPair.from_issued(issued)
 
 

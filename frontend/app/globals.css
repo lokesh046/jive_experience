@@ -30,7 +30,8 @@ h3 { font-size: 24px; line-height: 1.2; }
 .skip:focus { left: 8px; }
 
 .wrap { max-width: 1240px; margin: 0 auto; padding: 0 24px; width: 100%; }
-.narrow > p, .narrow > h2 { max-width: 720px; }
+.narrow > * { max-width: 700px; }
+#private .wrap > p { max-width: 720px; }
 .page { padding-top: 152px; flex: 1; }
 section.block { padding-top: 112px; }
 .muted { color: var(--mute); }
@@ -838,3 +839,13 @@ footer.site .wrap { flex-wrap: wrap; }
 .pill.go[disabled]:hover .go-t { color: #000; }
 .pill.go.full { justify-content: flex-start; }
 @media (prefers-reduced-motion: reduce) { .pill.go::before, .pill.go .go-a, .pill.go .go-t { transition: none; } }
+
+/* sign in with an emailed code */
+.or { display: flex; align-items: center; gap: 16px; margin: 36px 0 28px; color: var(--mute); font-size: 13px; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.otp { display: flex; flex-direction: column; gap: 18px; max-width: 700px; }
+.otp .f label { font-size: 13px; color: var(--fg); margin-bottom: 8px; }
+.otp input { background: #161616; border: 1px solid #262626; border-radius: 14px; padding: 0 16px; height: 52px; }
+.otp input:focus { border-color: #fff; }
+.otp .otp-code { font: 500 26px var(--font-sans), sans-serif; letter-spacing: 0.4em; text-align: center; }
+.otp .link[disabled] { opacity: 0.5; cursor: default; text-decoration: none; }
