@@ -18,6 +18,7 @@ from app.router.v1 import (
     admin_settings,
     auth,
     bookings,
+    box_office,
     events,
     leads,
     scanner,
@@ -39,6 +40,7 @@ api_router.include_router(leads.router)
 
 # Event staff scanner.
 api_router.include_router(scanner.router, prefix="/scanner")
+api_router.include_router(box_office.router, prefix="/box-office")
 
 # Administrator surfaces.
 api_router.include_router(admin_catalogue.router, prefix="/admin")

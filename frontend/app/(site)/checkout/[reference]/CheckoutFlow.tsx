@@ -5,25 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, rememberNext } from "@/lib/api-client";
 import { eventsById } from "@/lib/events-index";
 import { inr, longDate, timeOf } from "@/lib/format";
+import { loadRazorpay, type RazorpayResponse } from "@/lib/razorpay";
 import type { AuthUser, Booking, CheckoutResponse, EventListItem, Ticket } from "@/lib/types";
 
 type View = "loading" | "review" | "processing" | "failed" | "confirmed" | "expired" | "closed" | "unreachable";
-
-interface RazorpayResponse { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }
-interface RazorpayInstance { open(): void; on(ev: string, cb: (r: unknown) => void): void }
-declare global { interface Window { Razorpay?: new (o: Record<string, unknown>) => RazorpayInstance } }
-
-function loadRazorpay(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.Razorpay) return resolve();
-    const s = document.createElement("script");
-    s.src = "https://checkout.razorpay.com/v1/checkout.js";
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Could not load the payment window."));
-    document.head.appendChild(s);
-  });
-}
 
 const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 

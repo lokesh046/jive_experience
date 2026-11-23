@@ -62,6 +62,9 @@ def _send_blocking(settings: Settings, message: EmailMessage) -> None:
 
 async def send_mail(settings: Settings, mail: Mail) -> None:
     """Send one message. Raises on failure so the outbox retries it."""
+    if mail.to.lower().endswith(".invalid"):
+        # A counter sale with no email address belongs to a throwaway account; nothing to send.
+        return
     message = build_message(settings, mail)
     try:
         await asyncio.to_thread(_send_blocking, settings, message)

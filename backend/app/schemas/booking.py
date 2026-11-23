@@ -96,6 +96,46 @@ class ManualTicketRequest(BaseModel):
         return value.strip() or None if isinstance(value, str) else value
 
 
+class BoxOfficeSaleRequest(BaseModel):
+    """A walk-up sale. The buyer needs no account: a name or a phone number is enough."""
+
+    ticket_category_id: uuid.UUID
+    quantity: Annotated[int, Field(ge=1, le=20)] = 1
+    method: BookingSource
+    buyer_name: Annotated[str | None, Field(default=None, max_length=120)] = None
+    buyer_phone: Annotated[str | None, Field(default=None, max_length=20)] = None
+    buyer_email: EmailStr | None = None
+    note: Annotated[str | None, Field(default=None, max_length=300)] = None
+
+    @field_validator("method")
+    @classmethod
+    def _cash_or_online(cls, value: BookingSource) -> BookingSource:
+        if value is BookingSource.COMPLIMENTARY:
+            raise ValueError("A counter sale is paid in cash or online.")
+        return value
+
+    @field_validator("buyer_name", "buyer_phone", "buyer_email", "note", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value: object) -> object:
+        return (value.strip() or None) if isinstance(value, str) else value
+
+
+class BoxOfficeBookingOut(BaseModel):
+    """A counter booking and, once paid, the tickets to show the buyer."""
+
+    booking: BookingOut
+    tickets: list[TicketOut] = Field(default_factory=list)
+
+
+class BoxOfficeSellerRow(BaseModel):
+    seller_id: uuid.UUID
+    seller_name: str | None = None
+    cash_tickets: int
+    cash_paise: int
+    online_tickets: int
+    online_paise: int
+
+
 class BookingAdminOut(BookingOut):
     user_id: uuid.UUID
     cancellation_reason: str | None = None

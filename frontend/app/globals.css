@@ -757,3 +757,31 @@ footer.site .wrap { flex-wrap: wrap; }
 /* checkout inside the event page */
 .co-embedded { outline: 0; scroll-margin-top: 120px; }
 .co-embedded h3 { font-size: 30px; }
+
+/* Box office: sold from a phone at the door */
+.bo { gap: 0; }
+.bo-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.bo-cats { display: grid; gap: 10px; }
+.bo-cat { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: none; color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
+.bo-cat b { font: 400 20px/1.2 var(--font-serif), serif; }
+.bo-cat.on { border-color: var(--fg); background: rgba(255, 255, 255, 0.08); }
+.bo-cat:disabled { opacity: 0.45; cursor: not-allowed; }
+.bo-qty { display: flex; align-items: center; gap: 20px; }
+.bo-qty button { width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--fg); font-size: 24px; cursor: pointer; }
+.bo-qty output { min-width: 40px; text-align: center; font: 400 36px/1 var(--font-serif), serif; font-variant-numeric: tabular-nums; }
+.bo-method { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bo-method button { height: 52px; border-radius: 14px; border: 1px solid var(--line); background: none; color: var(--fg); font: inherit; cursor: pointer; }
+.bo-method button.on { background: #fff; color: #000; border-color: #fff; }
+.bo-fields { display: grid; gap: 10px; margin-bottom: 24px; }
+.bo-fields input { height: 52px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; }
+.bo-sales { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 14px; }
+.bo-sales summary { cursor: pointer; color: var(--mute); font-size: 15px; }
+.bo-row { display: grid; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--mute); }
+.bo-row b { color: var(--fg); font-weight: 500; }
+.bo-center { display: flex; flex-direction: column; gap: 14px; margin-top: 24px; }
+.bo-amount { font: 400 56px/1.05 var(--font-serif), serif; font-variant-numeric: tabular-nums; }
+.bo-done { font: 400 28px/1.2 var(--font-serif), serif; color: #4ade80; margin-top: 8px; }
+.bo-ticket { background: #fff; color: #000; border-radius: 18px; padding: 24px; margin: 18px 0; display: grid; justify-items: center; gap: 12px; }
+.bo-qr { width: min(70vw, 260px); aspect-ratio: 1; }
+.bo-qr svg { width: 100%; height: 100%; display: block; }
+.bo-ticket span { font: 500 13px/1 var(--font-sans), sans-serif; letter-spacing: 0.08em; }

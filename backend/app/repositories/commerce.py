@@ -21,6 +21,7 @@ from app.core.pagination import PageParams
 from app.models.commerce import (
     Booking,
     BookingItem,
+    BookingSource,
     BookingStatus,
     Payment,
     PaymentStatus,
@@ -205,6 +206,37 @@ class BookingRepository(BaseRepository[Booking]):
 
     async def reference_taken(self, reference: str) -> bool:
         return await self.exists(Booking.reference == reference)
+
+    async def box_office_totals(
+        self, event_id: uuid.UUID, *, seller_id: uuid.UUID | None
+    ) -> list[tuple[uuid.UUID | None, str | None, str, int, int]]:
+        """Confirmed counter sales, per seller and per way of paying.
+
+        Rows are (seller id, seller name, source, tickets, paise).
+        """
+        from app.models.user import User
+
+        stmt = (
+            select(
+                Booking.issued_by_id,
+                User.full_name,
+                Booking.source,
+                func.sum(Booking.quantity),
+                func.sum(Booking.total_paise),
+            )
+            .join(User, User.id == Booking.issued_by_id)
+            .where(
+                Booking.event_id == event_id,
+                Booking.status == BookingStatus.CONFIRMED,
+                Booking.issued_by_id.is_not(None),
+                Booking.source.in_([BookingSource.CASH, BookingSource.ONLINE]),
+            )
+            .group_by(Booking.issued_by_id, User.full_name, Booking.source)
+        )
+        if seller_id is not None:
+            stmt = stmt.where(Booking.issued_by_id == seller_id)
+        rows = (await self.session.execute(stmt)).all()
+        return [(row[0], row[1], row[2].value, int(row[3] or 0), int(row[4] or 0)) for row in rows]
 
     async def due_for_reminder(
         self, *, now: datetime, horizon: timedelta, limit: int = 500

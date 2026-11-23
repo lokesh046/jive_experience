@@ -17,7 +17,7 @@ export function RoleLinks() {
     window.addEventListener("focus", sync);
     return () => { window.removeEventListener("jive-auth", sync); window.removeEventListener("focus", sync); };
   }, []);
-  if (role === "ADMIN") return (<><li><Link href="/admin">Admin</Link></li><li><Link href="/scan">Scanner</Link></li></>);
-  if (role === "EVENT_STAFF") return <li><Link href="/scan">Scanner</Link></li>;
+  if (role === "ADMIN") return (<><li><Link href="/admin">Admin</Link></li><li><Link href="/scan">Scanner</Link></li><li><Link href="/box-office">Box office</Link></li></>);
+  if (role === "EVENT_STAFF") return (<><li><Link href="/scan">Scanner</Link></li><li><Link href="/box-office">Box office</Link></li></>);
   return null;
 }

@@ -26,12 +26,12 @@ from app.core.config import Settings
 from app.core.errors import BusinessRuleError, ConflictError, NotFoundError, PermissionDeniedError
 from app.core.pagination import PageParams
 from app.models.commerce import Booking, BookingItem, BookingSource, BookingStatus
-from app.models.event import Event, EventStatus
+from app.models.event import Event, EventStatus, TicketCategory
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.catalogue import EventRepository, TicketCategoryRepository
 from app.repositories.commerce import BookingRepository, PaymentRepository
 from app.repositories.user import UserRepository
-from app.schemas.booking import BookingCreateRequest, ManualTicketRequest
+from app.schemas.booking import BookingCreateRequest, BoxOfficeSaleRequest, ManualTicketRequest
 from app.schemas.promo import PromoCheckOut, PromoCheckRequest
 from app.services.audit import AuditService
 from app.services.inventory import InventoryService, RequestedItem
@@ -323,10 +323,32 @@ class BookingService:
             )
         recipient_id = recipient.id
 
-        await self.inventory.sell_directly(category, payload.quantity)
+        return await self._record_direct_sale(
+            event=event,
+            category=category,
+            recipient_id=recipient_id,
+            quantity=payload.quantity,
+            kind=payload.kind,
+            note=payload.note,
+            actor=actor,
+        )
 
-        unit = category.price_paise if payload.kind is BookingSource.CASH else 0
-        total = unit * payload.quantity
+    async def _record_direct_sale(
+        self,
+        *,
+        event: Event,
+        category: TicketCategory,
+        recipient_id: uuid.UUID,
+        quantity: int,
+        kind: BookingSource,
+        note: str | None,
+        actor: User,
+    ) -> Booking:
+        """Take stock and confirm a booking that needs no gateway: free, or cash in hand."""
+        await self.inventory.sell_directly(category, quantity)
+
+        unit = category.price_paise if kind is BookingSource.CASH else 0
+        total = unit * quantity
         now = datetime.now(UTC)
         booking = Booking(
             reference=await self._unique_reference(),
@@ -336,11 +358,11 @@ class BookingService:
             subtotal_paise=total,
             fees_paise=0,
             total_paise=total,
-            quantity=payload.quantity,
+            quantity=quantity,
             currency=self.settings.default_currency,
             confirmed_at=now,
-            customer_note=payload.note,
-            source=payload.kind,
+            customer_note=note,
+            source=kind,
             issued_by_id=actor.id,
         )
         self.bookings.add(booking)
@@ -351,7 +373,7 @@ class BookingService:
                 ticket_category_id=category.id,
                 category_name=category.name,
                 unit_price_paise=unit,
-                quantity=payload.quantity,
+                quantity=quantity,
                 line_total_paise=total,
             )
         )
@@ -367,10 +389,10 @@ class BookingService:
             entity_id=booking.id,
             actor=actor,
             after={
-                "kind": payload.kind.value,
+                "kind": kind.value,
                 "event_id": str(event.id),
                 "category": category.name,
-                "quantity": payload.quantity,
+                "quantity": quantity,
                 "total_paise": total,
                 "recipient_id": str(recipient_id),
             },
@@ -380,9 +402,151 @@ class BookingService:
         logger.info(
             "booking_issued_manually",
             reference=booking.reference,
-            kind=payload.kind.value,
-            quantity=payload.quantity,
+            kind=kind.value,
+            quantity=quantity,
         )
+        return booking
+
+    # ------------------------------------------------------- box office ---
+
+    async def box_office_sale(
+        self, event_id: uuid.UUID, payload: BoxOfficeSaleRequest, *, actor: User
+    ) -> Booking:
+        """A walk-up sale at the counter, paid in cash or through the gateway.
+
+        Cash is confirmed on the spot. Online takes the same inventory hold an
+        online customer gets and leaves the booking pending: the seller then opens
+        the gateway for the buyer, and the booking is confirmed only by the verified
+        payment, exactly as on the website.
+        """
+        event = await self.events.get(event_id)
+        if event is None:
+            raise NotFoundError("Event not found.", code="EVENT_NOT_FOUND")
+        if event.status not in (EventStatus.PUBLISHED, EventStatus.SOLD_OUT):
+            raise BusinessRuleError(
+                "Tickets can only be sold for a published event.", code="EVENT_NOT_SELLABLE"
+            )
+        category = await TicketCategoryRepository(self.session).get(payload.ticket_category_id)
+        if category is None or category.event_id != event.id or not category.is_active:
+            raise NotFoundError(
+                "Ticket category not found for this event.", code="CATEGORY_NOT_FOUND"
+            )
+
+        buyer = await self._walk_in_buyer(payload)
+        buyer_id = buyer.id
+        note = " | ".join(
+            part
+            for part in (
+                f"Box office: {payload.buyer_name}" if payload.buyer_name else "Box office",
+                payload.buyer_phone,
+                payload.note,
+            )
+            if part
+        )
+
+        if payload.method is BookingSource.CASH:
+            return await self._record_direct_sale(
+                event=event,
+                category=category,
+                recipient_id=buyer_id,
+                quantity=payload.quantity,
+                kind=BookingSource.CASH,
+                note=note,
+                actor=actor,
+            )
+
+        now = datetime.now(UTC)
+        held = await self.inventory.hold(
+            event=event,
+            user_id=buyer_id,
+            items=[RequestedItem(ticket_category_id=category.id, quantity=payload.quantity)],
+            now=now,
+        )
+        total = sum(item.line_total_paise for item in held)
+        booking = Booking(
+            reference=await self._unique_reference(),
+            user_id=buyer_id,
+            event_id=event.id,
+            status=BookingStatus.PENDING,
+            subtotal_paise=total,
+            fees_paise=0,
+            total_paise=total,
+            quantity=payload.quantity,
+            currency=self.settings.default_currency,
+            expires_at=now + timedelta(seconds=self.settings.reservation_hold_seconds),
+            customer_note=note,
+            source=BookingSource.ONLINE,
+            issued_by_id=actor.id,
+        )
+        self.bookings.add(booking)
+        await self.session.flush()
+        for item in held:
+            self.session.add(
+                BookingItem(
+                    booking_id=booking.id,
+                    ticket_category_id=item.ticket_category.id,
+                    category_name=item.ticket_category.name,
+                    unit_price_paise=item.unit_price_paise,
+                    quantity=item.quantity,
+                    line_total_paise=item.line_total_paise,
+                )
+            )
+        await self.inventory.attach_to_booking([item.reservation_id for item in held], booking.id)
+        await self.audit.record(
+            "booking.box_office_started",
+            entity_type="booking",
+            entity_id=booking.id,
+            actor=actor,
+            after={"event_id": str(event.id), "quantity": payload.quantity, "total_paise": total},
+        )
+        await self.session.commit()
+        await self.session.refresh(booking, attribute_names=["items"])
+        if booking.total_paise == 0:
+            await self.confirm_paid(booking)
+            await self.session.refresh(
+                booking, attribute_names=["status", "confirmed_at", "expires_at"]
+            )
+        return booking
+
+    async def _walk_in_buyer(self, payload: BoxOfficeSaleRequest) -> User:
+        """The account a counter sale belongs to.
+
+        With an email, the buyer's real account (created if new) so the ticket also
+        reaches their inbox. Without one, a throwaway account on an address that can
+        never receive mail: nobody signs in to it and nothing is sent to it.
+        """
+        users = UserRepository(self.session)
+        if payload.buyer_email:
+            email = str(payload.buyer_email).lower()
+            existing = await users.by_email(email)
+            if existing is not None:
+                if existing.status is not UserStatus.ACTIVE:
+                    raise BusinessRuleError(
+                        "That account is suspended, so tickets cannot be sold to it.",
+                        code="ACCOUNT_NOT_ACTIVE",
+                    )
+                return existing
+        else:
+            email = f"walkin-{secrets.token_hex(8)}@walk-in.invalid"
+        buyer = User(
+            role=UserRole.CUSTOMER,
+            status=UserStatus.ACTIVE,
+            email=email,
+            full_name=payload.buyer_name,
+        )
+        self.session.add(buyer)
+        await self.session.flush()
+        return buyer
+
+    async def get_for_seller(self, reference: str, actor: User) -> Booking:
+        """A counter booking, for the person who made it (or an administrator)."""
+        booking = await self.bookings.by_reference(reference)
+        if (
+            booking is None
+            or booking.issued_by_id is None
+            or (actor.role is not UserRole.ADMIN and booking.issued_by_id != actor.id)
+        ):
+            raise NotFoundError("Booking not found.", code="BOOKING_NOT_FOUND")
         return booking
 
     # ---------------------------------------------------------- confirm ---
