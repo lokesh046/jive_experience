@@ -162,7 +162,7 @@ export function CheckoutFlow({
 
   return (
     <Shell embedded={embedded}>
-        <div className="cols">
+        <div className="cols pick-order">
           <section aria-live="polite">
             {view === "loading" && <div className="skeleton" style={{ height: 56, maxWidth: 420 }} />}
 

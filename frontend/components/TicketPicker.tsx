@@ -197,7 +197,7 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
 
       {cats.some(isOut) && <WaitlistForm slug={slug} soldOut={cats.filter(isOut).map((c) => ({ id: c.id, name: c.name }))} everythingGone={open.length === 0} />}
 
-      <div className="cols">
+      <div className="cols pick-order">
         <div>
           <h3 className="step">2. How many?</h3>
           {current ? (
