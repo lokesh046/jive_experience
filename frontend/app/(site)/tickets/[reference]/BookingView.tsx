@@ -113,7 +113,7 @@ export function BookingView({ reference }: { reference: string }) {
           </>
         )}
         <div className="bv-meta">
-          <span className={`chip ${live ? "good" : "off"}`}>{STATUS[b.status] ?? b.status}</span>
+          <span className={`stchip ${live ? "good" : "off"}`}>{STATUS[b.status] ?? b.status}</span>
           <span className="small">Booking <span style={{ color: "#fff" }}>{b.reference}</span> · {inr(b.total_paise)}</span>
         </div>
 

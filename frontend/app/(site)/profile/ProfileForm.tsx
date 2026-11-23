@@ -73,7 +73,7 @@ export function ProfileForm() {
     msg?.where === where && <p className={msg.ok ? "ok" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>;
 
   return (
-    <main className="page">
+    <main className="page prof">
       <div className="wrap narrow">
         <h1>Profile</h1>
 

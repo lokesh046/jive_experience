@@ -898,10 +898,10 @@ select option { background: #111; }
 .mt-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .mt-body h3 { font-size: 26px; line-height: 1.15; }
 .mt-body .cats { margin-top: 8px; }
-.chip { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; font: 500 12px/1 var(--font-sans), sans-serif; border: 1px solid var(--field); color: var(--mute); }
-.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.chip.good { color: #4ade80; border-color: rgba(74, 222, 128, 0.35); }
-.chip.wait { color: #d9a441; border-color: rgba(217, 164, 65, 0.4); }
+.stchip { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; font: 500 12px/1 var(--font-sans), sans-serif; border: 1px solid var(--field); color: var(--mute); }
+.stchip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.stchip.good { color: #4ade80; border-color: rgba(74, 222, 128, 0.35); }
+.stchip.wait { color: #d9a441; border-color: rgba(217, 164, 65, 0.4); }
 .mt-side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; text-align: right; }
 .mt-side strong { font: 400 28px var(--font-serif), serif; color: var(--fg); font-variant-numeric: tabular-nums; }
 .mt-go { font-size: 14px; color: var(--mute); transition: color 0.2s; }
@@ -971,4 +971,21 @@ select option { background: #111; }
   #events .cards::-webkit-scrollbar { display: none; }
   #events .cards > .card { flex: 0 0 80%; scroll-snap-align: start; }
   #events .cards > .card .ph { aspect-ratio: 4 / 5; }
+}
+
+/* Profile fields match the boxed fields used elsewhere */
+.prof .f label { font-size: 13px; color: var(--fg); margin-bottom: 8px; }
+.prof .f input { background: #161616; border: 1px solid #262626; border-radius: 14px; padding: 0 16px; height: 52px; }
+.prof .f input:focus { border-color: #fff; }
+
+/* Admin on a phone: one swipeable row of sections instead of four wrapped rows */
+@media (max-width: 860px) {
+  .ad-side { flex-wrap: nowrap; overflow-x: auto; gap: 4px; padding: 10px 12px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .ad-side::-webkit-scrollbar { display: none; }
+  .ad-side nav, .ad-side-foot { flex-wrap: nowrap; flex: none; }
+  .ad-side a { white-space: nowrap; padding: 12px 14px; }
+  .ad-side-foot .small { display: none; }
+  .ad-side-foot { border-left: 1px solid var(--line); padding-left: 8px; margin-left: 4px; }
+  .filters button, .lu-ctl button, .chip { min-height: 40px; }
+  .lu-ctl button { min-width: 40px; }
 }

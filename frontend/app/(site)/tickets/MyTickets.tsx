@@ -70,7 +70,7 @@ export function MyTickets() {
                   <span className="mt-date">{ev ? dayMonth(ev.starts_at, ev.timezone) : b.reference}</span>
                 </div>
                 <div className="mt-body">
-                  <span className={`chip ${tone}`}>{LABEL[b.status] ?? b.status}</span>
+                  <span className={`stchip ${tone}`}>{LABEL[b.status] ?? b.status}</span>
                   <h3>{ev?.title ?? "Booking"}</h3>
                   {ev && <p className="small">{ev.venue_name}, {ev.city}</p>}
                   <ul className="cats" aria-label="Ticket types">
