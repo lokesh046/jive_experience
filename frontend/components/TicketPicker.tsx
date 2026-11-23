@@ -208,6 +208,12 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
                 <button type="button" aria-label="More tickets" disabled={count >= cap} onClick={() => { setWanted(count + 1); if (current) recheck(current.id, count + 1); }}>+</button>
               </div>
               <p className="small">{current.name} · {inr(current.price_paise)} each. Maximum {Math.min(cap, maxPerCustomer)} per booking.</p>
+              {current.description?.trim() && (
+                <div className="how-inc">
+                  <p className="step">Included with {current.name}</p>
+                  <Includes text={current.description} />
+                </div>
+              )}
             </div>
           ) : (
             <p className="small">Every ticket type is sold out.</p>
