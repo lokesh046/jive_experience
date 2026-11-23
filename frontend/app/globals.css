@@ -704,12 +704,15 @@ select option { background: #111; }
 
 /* enquiry form and newsletter */
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
-.enq { margin-top: 48px; display: grid; grid-template-columns: 4fr 8fr; gap: 56px; padding: 48px; border: 1px solid var(--line); border-radius: 28px; background: linear-gradient(160deg, #111 0%, #0a0a0a 100%); }
-.enq-intro h3 { font-size: 30px; line-height: 1.15; margin-bottom: 16px; }
-.enq-intro p { font-size: 15px; line-height: 26px; max-width: 320px; }
-.enq-body { display: flex; flex-direction: column; gap: 28px; align-items: flex-start; }
-.enq-grid { width: 100%; display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }
-.enq-grid .s2 { grid-column: span 2; } .enq-grid .s3 { grid-column: span 3; } .enq-grid .s6 { grid-column: 1 / -1; }
+.enq { margin-top: 48px; display: grid; grid-template-columns: 5fr 7fr; gap: 56px; padding: 48px; border: 1px solid var(--line); border-radius: 28px; background: linear-gradient(160deg, #111 0%, #0a0a0a 100%); }
+.enq-side, .enq-main { display: flex; flex-direction: column; gap: 22px; }
+.enq-intro { margin-bottom: 6px; }
+.enq-intro h3 { font-size: 30px; line-height: 1.15; margin-bottom: 14px; }
+.enq-intro p { font-size: 15px; line-height: 26px; max-width: 380px; }
+.enq-two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.enq-main .grow { flex: 1; }
+.enq-main .grow textarea { flex: 1; }
+.enq-main .pill { margin-top: 2px; }
 .enq .f label { font-size: 13px; line-height: 18px; color: var(--fg); margin-bottom: 8px; }
 .enq .f label i { font-style: normal; color: #7a7a7a; margin-left: 6px; }
 .enq input, .enq textarea { background: #161616; border: 1px solid #262626; border-radius: 14px; padding: 0 16px; height: 52px; transition: border-color 0.2s, background 0.2s; }
@@ -724,7 +727,7 @@ select option { background: #111; }
 .news input[type=email] { flex: 1; }
 footer.site .wrap { flex-wrap: wrap; }
 @media (max-width: 900px) { .enq { grid-template-columns: 1fr; gap: 28px; padding: 28px 20px; border-radius: 22px; } .enq-intro p { max-width: none; } }
-@media (max-width: 640px) { .enq-grid { grid-template-columns: 1fr; } .enq-grid .s2, .enq-grid .s3 { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .enq-two { grid-template-columns: 1fr; } }
 .enq-card { border: 1px solid var(--line); border-radius: 18px; padding: 20px 24px; margin-top: 20px; background: #0b0b0b; display: flex; flex-direction: column; gap: 12px; }
 .enq-card header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 .enq-card b { color: var(--fg); font-weight: 500; font-size: 17px; }
