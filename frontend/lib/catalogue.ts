@@ -77,6 +77,22 @@ export async function getArtists(events: EventListItem[]): Promise<Artist[]> {
   return out.slice(0, 8);
 }
 
+/** The artists an admin chose for the homepage, in the order they chose. Empty until some are added. */
+export async function getHomeArtists(): Promise<{ name: string; note: string; img: string; slug: string }[]> {
+  "use cache";
+  cacheTag("events");
+  try {
+    const res = await fetch(`${API_V1}/artists`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) throw new Error(String(res.status));
+    const rows = (await res.json()) as { name: string; note: string | null; photo_url: string | null }[];
+    cacheLife("minutes");
+    return rows.filter((a) => a.photo_url).map((a) => ({ name: a.name, note: a.note ?? "", img: a.photo_url as string, slug: "" }));
+  } catch {
+    cacheLife("seconds");
+    return [];
+  }
+}
+
 /** The default cancellation and refund policy, or null when the company has not set one. */
 export async function getDefaultPolicy(): Promise<Policy | null> {
   "use cache";

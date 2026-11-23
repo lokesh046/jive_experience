@@ -3,7 +3,8 @@ import { useRef, useState } from "react";
 import { ApiError, api } from "@/lib/api-client";
 import { fromIst, toIst } from "@/lib/admin";
 import { photoProblem, uploadPhoto } from "@/lib/upload";
-import type { EventAdmin } from "@/lib/types";
+import { useData } from "@/lib/use-data";
+import type { ArtistAdmin, EventAdmin } from "@/lib/types";
 
 interface Row { key: string; name: string; role: string; photo: string; time: string }
 const MAX = 20;
@@ -21,6 +22,7 @@ export function LineupEditor({ event, onSaved }: { event: EventAdmin; onSaved: (
   const [uploading, setUploading] = useState<string | null>(null);
   const [note, setNote] = useState<{ text: string; ok?: boolean } | null>(null);
   const editable = event.status !== "CANCELLED" && event.status !== "COMPLETED";
+  const artists = useData<ArtistAdmin[]>("admin/artists");
 
   const update = (next: Row[]) => { setEdited(next); setNote(null); };
   const patch = (key: string, part: Partial<Row>) => update(rows.map((r) => (r.key === key ? { ...r, ...part } : r)));
@@ -61,7 +63,23 @@ export function LineupEditor({ event, onSaved }: { event: EventAdmin; onSaved: (
     <section className="section" aria-labelledby="lineup-h">
       <div className="ad-head" style={{ marginBottom: 8 }}>
         <h2 id="lineup-h" style={{ margin: 0 }}>Lineup</h2>
-        {editable && rows.length < MAX && <button className="pill sm" type="button" onClick={() => update([...rows, { key: newKey(), name: "", role: "", photo: "", time: "" }])}>Add performer</button>}
+        {editable && rows.length < MAX && (
+          <div className="lu-add">
+            {artists.data && artists.data.length > 0 && (
+              <>
+                <label htmlFor="lu-pick" className="sr">Add from your artists</label>
+                <select id="lu-pick" value="" onChange={(e) => {
+                  const a = artists.data?.find((x) => x.id === e.target.value);
+                  if (a) update([...rows, { key: newKey(), name: a.name, role: a.note ?? "", photo: a.photo_url ?? "", time: "" }]);
+                }}>
+                  <option value="">Add from your artists…</option>
+                  {artists.data.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </>
+            )}
+            <button className="pill sm" type="button" onClick={() => update([...rows, { key: newKey(), name: "", role: "", photo: "", time: "" }])}>Add performer</button>
+          </div>
+        )}
       </div>
       <p className="hint" style={{ marginBottom: 20 }}>Shown on the event page in this order. Set times are India time.</p>
       {rows.length === 0 && <p className="empty">No performers yet. The event page shows no lineup until you add some.</p>}

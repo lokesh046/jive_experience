@@ -10,12 +10,14 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.router.v1 import (
+    admin_artists,
     admin_catalogue,
     admin_commerce,
     admin_leads,
     admin_promos,
     admin_reports,
     admin_settings,
+    artists,
     auth,
     bookings,
     box_office,
@@ -37,6 +39,7 @@ api_router.include_router(bookings.router, prefix="/bookings")
 api_router.include_router(bookings.tickets_router, prefix="/tickets")
 api_router.include_router(bookings.webhook_router, prefix="/payments")
 api_router.include_router(leads.router)
+api_router.include_router(artists.router)
 
 # Event staff scanner.
 api_router.include_router(scanner.router, prefix="/scanner")
@@ -48,6 +51,7 @@ api_router.include_router(admin_commerce.router, prefix="/admin")
 api_router.include_router(admin_reports.router, prefix="/admin")
 api_router.include_router(admin_leads.router, prefix="/admin")
 api_router.include_router(admin_promos.router, prefix="/admin")
+api_router.include_router(admin_artists.router, prefix="/admin")
 api_router.include_router(admin_settings.router, prefix="/admin")
 
 # Still to come:

@@ -29,6 +29,7 @@ from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.user import User, UserRole, UserStatus
 from app.repositories.user import UserRepository
+from app.services.artist import ArtistService
 from app.services.audit import AuditService
 from app.services.auth import AuthService, RequestContext
 from app.services.booking import BookingService
@@ -153,6 +154,10 @@ def get_waitlist_service(
     return WaitlistService(session, outbox)
 
 
+def get_artist_service(session: DbSession) -> ArtistService:
+    return ArtistService(session)
+
+
 def get_promo_service(session: DbSession) -> PromoService:
     return PromoService(session)
 
@@ -223,6 +228,7 @@ OutboxServiceDep = Annotated[OutboxService, Depends(get_outbox_service)]
 LeadServiceDep = Annotated[LeadService, Depends(get_lead_service)]
 WaitlistServiceDep = Annotated[WaitlistService, Depends(get_waitlist_service)]
 PromoServiceDep = Annotated[PromoService, Depends(get_promo_service)]
+ArtistServiceDep = Annotated[ArtistService, Depends(get_artist_service)]
 SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]
 
 

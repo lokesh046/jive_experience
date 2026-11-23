@@ -351,3 +351,5 @@ export interface Promo {
   max_uses: number | null; used_count: number; max_uses_per_customer: number | null;
   valid_from: string | null; valid_until: string | null; is_active: boolean; created_at: string;
 }
+
+export interface ArtistAdmin { id: string; name: string; note: string | null; photo_url: string | null; show_on_home: boolean; sort_order: number }

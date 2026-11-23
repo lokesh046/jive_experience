@@ -994,3 +994,20 @@ select option { background: #111; }
   .tbl .tr > [data-label]::before { content: attr(data-label); display: inline-block; min-width: 96px; margin-right: 10px; font-size: 12px; letter-spacing: 0.04em; color: var(--mute); }
   .tbl .tr { gap: 6px !important; }
 }
+
+.lu-add { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.lu-add select { width: auto; min-width: 200px; max-width: 100%; }
+
+/* Artists admin */
+.ar-list { list-style: none; display: grid; gap: 12px; margin-top: 20px; }
+.ar-row { display: grid; grid-template-columns: 72px 1fr auto; gap: 18px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 20px; background: #0b0b0b; }
+.ar-row.off { opacity: 0.6; }
+.ar-pic { width: 72px; height: 90px; border-radius: 14px; overflow: hidden; background: var(--surface); display: grid; place-items: center; font: 400 28px var(--font-serif), serif; color: var(--mute); }
+.ar-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ar-main b { display: block; color: var(--fg); font: 400 20px/1.2 var(--font-serif), serif; }
+.ar-main p { font-size: 14px; line-height: 20px; margin-top: 4px; }
+.ar-ctl { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.ar-ctl .mv { display: flex; gap: 6px; }
+.ar-ctl .mv button { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--field); background: none; color: var(--fg); cursor: pointer; }
+.ar-ctl .mv button:disabled { opacity: 0.35; cursor: default; }
+@media (max-width: 700px) { .ar-row { grid-template-columns: 56px 1fr; } .ar-pic { width: 56px; height: 70px; } .ar-ctl { grid-column: 1 / -1; justify-content: flex-start; } .ar-ctl .mv button { width: 40px; height: 40px; } }
