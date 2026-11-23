@@ -819,3 +819,7 @@ footer.site .wrap { flex-wrap: wrap; }
 .gtk h2 { font-size: 32px; margin-bottom: 28px; }
 .gtk-cols { display: grid; grid-template-columns: 5fr 7fr; gap: 64px; align-items: start; }
 @media (max-width: 900px) { .gtk-cols { grid-template-columns: 1fr; gap: 40px; } }
+
+/* homepage */
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; }

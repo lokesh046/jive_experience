@@ -10,7 +10,7 @@ import { Ticker } from "@/components/Ticker";
 import { ARCHIVE, ARTISTS, PRIVATE_SERVICES } from "@/lib/content";
 import { getArtists, getEvents } from "@/lib/catalogue";
 import { SITE_NAME, SITE_URL } from "@/lib/config";
-import { longDate } from "@/lib/format";
+import { inr, longDate } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: { absolute: "JIVE — Live music evenings in Mumbai, Bengaluru, Delhi and Goa" },
@@ -47,9 +47,12 @@ async function HomeContent() {
               ? `${longDate(next.starts_at, next.timezone)} · ${next.venue_name}, ${next.city}`
               : "Intimate nights in converted mills, vaults and warehouses."}
           </p>
-          <Link className="pill" href={next ? `/events/${next.slug}` : "#events"}>
-            {next ? "Get tickets" : "See what is on"}
-          </Link>
+          <div className="hero-actions">
+            <Link className="pill" href={next ? `/events/${next.slug}` : "#events"}>
+              {next ? (next.starting_price_paise ? `Get tickets · from ${inr(next.starting_price_paise)}` : "Get tickets") : "See what is on"}
+            </Link>
+            {next && events.length > 1 && <Link className="pill ghost" href="#events">See all nights</Link>}
+          </div>
         </div>
       </section>
 
@@ -57,15 +60,17 @@ async function HomeContent() {
 
       <section className="block" id="events">
         <div className="wrap">
-          <h2>Upcoming nights</h2>
+          <div className="sec-head">
+            <h2>Upcoming nights</h2>
+            {events.length > 0 && <Link className="link" href="/events">See all events</Link>}
+          </div>
           {events.length === 0 ? (
             <p className="empty" style={{ marginTop: 32 }}>No upcoming nights yet. New dates are announced here first.</p>
           ) : (
             <div className="cards">
-              {events.slice(0, 6).map((e, i) => <EventCard key={e.id} event={e} priority={i < 3} />)}
+              {events.slice(0, 4).map((e, i) => <EventCard key={e.id} event={e} priority={i < 3} />)}
             </div>
           )}
-          {events.length > 0 && <p className="more"><Link className="pill ghost" href="/events">See all events</Link></p>}
         </div>
       </section>
 
@@ -84,6 +89,13 @@ async function HomeContent() {
         </div>
       </section>
 
+      <section className="block">
+        <div className="wrap">
+          <h2>From the archive</h2>
+          <ArchiveMorph photos={ARCHIVE} />
+        </div>
+      </section>
+
       <section className="block" id="private">
         <div className="wrap narrow">
           <h2>Private bookings</h2>
@@ -96,13 +108,6 @@ async function HomeContent() {
             ))}
           </div>
           <EnquiryForm />
-        </div>
-      </section>
-
-      <section className="block">
-        <div className="wrap">
-          <h2>From the archive</h2>
-          <ArchiveMorph photos={ARCHIVE} />
         </div>
       </section>
     </main>

@@ -11,7 +11,7 @@ export function SiteHeader() {
         <ul>
           <li><Link href="/events">Events</Link></li>
           <li><Link href="/#artists">Artists</Link></li>
-          <li><Link href="/#private">Venue</Link></li>
+          <li><Link href="/#private">Private bookings</Link></li>
           <RoleLinks />
         </ul>
         <div className="nav-end">
