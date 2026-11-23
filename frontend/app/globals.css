@@ -989,3 +989,8 @@ select option { background: #111; }
   .filters button, .lu-ctl button, .chip { min-height: 40px; }
   .lu-ctl button { min-width: 40px; }
 }
+
+@media (max-width: 860px) {
+  .tbl .tr > [data-label]::before { content: attr(data-label); display: inline-block; min-width: 96px; margin-right: 10px; font-size: 12px; letter-spacing: 0.04em; color: var(--mute); }
+  .tbl .tr { gap: 6px !important; }
+}
