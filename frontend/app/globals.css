@@ -361,7 +361,7 @@ select option { background: #111; }
 @keyframes tkfill { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .tkp-admit { writing-mode: vertical-rl; transform: rotate(180deg); }
 .tkp-bars { width: 52px; height: 52px; background: repeating-linear-gradient(90deg, #241b30 0 3px, transparent 3px 6px, #241b30 6px 7px, transparent 7px 11px); border-radius: 2px; }
-.tkp-code { font-size: 10px; text-align: center; }
+.tkp-code { font-size: 11px; text-align: center; }
 @media (max-width: 640px) {
   .tkp { grid-template-columns: 1fr; }
   .tkp-main { border-radius: 22px 22px 0 0; padding: 22px 22px 24px; }
@@ -634,7 +634,7 @@ select option { background: #111; }
 .vbenefits .inc { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 32px; font-size: 16px; line-height: 24px; }
 .vbenefits .inc li { padding-left: 26px; }
 .vbenefits .inc li::before { top: 8px; }
-@media (max-width: 640px) { .vphotos.n2, .vphotos.n3 { grid-template-columns: 1fr 1fr; } .vphotos li { aspect-ratio: 1; } .vphotos.n1 li { aspect-ratio: 4/3; } .vbenefits .inc { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .vphotos.n2 { grid-template-columns: 1fr 1fr; } .vphotos li { aspect-ratio: 1; } .vphotos.n1 li { aspect-ratio: 4/3; } .vbenefits .inc { grid-template-columns: 1fr; } }
 
 /* sales dashboard */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 28px; }
@@ -954,3 +954,21 @@ select option { background: #111; }
 @media (max-width: 860px) { .ft { margin-top: 88px; } .ft-top { grid-template-columns: 1fr; gap: 44px; padding-top: 48px; } .ft-word { margin-top: 48px; } }
 @media (max-width: 520px) { .ft-cols { grid-template-columns: 1fr 1fr; } }
 .ft-brand .news .pill { height: 46px; padding: 0 24px; }
+
+/* Phones: easier taps, shorter lists */
+@media (max-width: 700px) {
+  .nav .logo { display: inline-block; padding: 10px 6px 10px 0; margin: -10px 0; }
+  .track a { padding: 16px 0; }
+  .link { padding: 10px 0; }
+  .tabs button { padding: 12px 22px; }
+  .ft-cols a, .ft-legal a { display: inline-block; padding: 7px 0; }
+  .ft-cols ul { gap: 2px; }
+  .ft-legal nav { gap: 0 20px; }
+  .ft-mark, .auth-logo { display: inline-block; padding: 8px 0; }
+  .card .ph { aspect-ratio: 4 / 3; }
+  /* The homepage row of nights swipes sideways instead of stacking four tall photos. */
+  #events .cards { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 24px; margin: 32px -24px 0; padding: 0 24px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  #events .cards::-webkit-scrollbar { display: none; }
+  #events .cards > .card { flex: 0 0 80%; scroll-snap-align: start; }
+  #events .cards > .card .ph { aspect-ratio: 4 / 5; }
+}
