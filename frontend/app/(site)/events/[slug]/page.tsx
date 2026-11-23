@@ -9,6 +9,7 @@ import { Lineup } from "@/components/Lineup";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import { VenueDetails } from "@/components/VenueDetails";
 import { EventGallery } from "@/components/EventGallery";
+import { StickyBuy } from "@/components/StickyBuy";
 import { TicketPicker } from "@/components/TicketPicker";
 import { getEvent, getEvents } from "@/lib/catalogue";
 import { SITE_NAME, SITE_URL } from "@/lib/config";
@@ -114,11 +115,7 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
           )}
         </div>
 
-        <VenueDetails venue={e.venue} />
-
-        <Lineup performers={e.lineup} zone={e.timezone} eventStart={e.starts_at} />
-
-        <section id="tickets" style={{ paddingTop: 96 }}>
+        <section id="tickets" style={{ paddingTop: 72 }}>
           <h2>Tickets</h2>
           <p className="sub">
             {e.on_sale && prices.length > 0 ? `From ${inr(Math.min(...prices))}` : ""}
@@ -126,6 +123,10 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
           {!e.on_sale && e.is_sold_out && !e.is_past && !cancelled && <WaitlistForm slug={e.slug} everythingGone soldOut={e.ticket_categories.map((c) => ({ id: c.id, name: c.name }))} />}
           <TicketPicker slug={e.slug} categories={e.ticket_categories} maxPerCustomer={e.max_tickets_per_customer} onSale={e.on_sale} saleMessage={saleMessage} event={{ slug: e.slug, title: e.title, starts_at: e.starts_at, timezone: e.timezone, venue_name: e.venue.name, city: e.venue.city }} preview={{ when: `${longDate(e.starts_at, e.timezone)} · ${timeOf(e.starts_at, e.timezone)}`, title: e.title, venue: `${e.venue.name}, ${e.venue.city}`, year: String(new Date(e.starts_at).getFullYear()) }} />
         </section>
+
+        <Lineup performers={e.lineup} zone={e.timezone} eventStart={e.starts_at} />
+
+        <VenueDetails venue={e.venue} />
 
         <EventLocation venue={e.venue} locationUrl={e.location_url} />
 
@@ -146,6 +147,7 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
           )}
         </div>
       </div>
+      {e.on_sale && !e.is_past && !cancelled && <StickyBuy price={prices.length ? inr(Math.min(...prices)) : null} label="Get tickets" />}
     </main>
   );
 }

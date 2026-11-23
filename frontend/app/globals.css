@@ -785,3 +785,13 @@ footer.site .wrap { flex-wrap: wrap; }
 .bo-qr { width: min(70vw, 260px); aspect-ratio: 1; }
 .bo-qr svg { width: 100%; height: 100%; display: block; }
 .bo-ticket span { font: 500 13px/1 var(--font-sans), sans-serif; letter-spacing: 0.08em; }
+
+/* Event page: a buy bar that follows phone readers until the tickets are in view */
+.sticky-buy { display: none; }
+@media (max-width: 720px) {
+  .sticky-buy { display: flex; align-items: center; justify-content: space-between; gap: 16px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(0, 0, 0, 0.92); backdrop-filter: blur(12px); border-top: 1px solid var(--line); transform: translateY(110%); transition: transform 0.3s var(--ease); }
+  .sticky-buy.on { transform: none; }
+  .sticky-buy b { color: var(--fg); font-weight: 500; }
+  .sticky-buy .pill { height: 44px; padding: 0 22px; }
+}
+@media (prefers-reduced-motion: reduce) { .sticky-buy { transition: none; } }
