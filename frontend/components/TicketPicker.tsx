@@ -5,6 +5,7 @@ import { ApiError, api, rememberNext } from "@/lib/api-client";
 import { inr } from "@/lib/format";
 import { isPremiumType } from "@/lib/premium";
 import { TicketPreview } from "@/components/TicketPreview";
+import { CheckoutFlow, type EventSummary } from "@/app/(site)/checkout/[reference]/CheckoutFlow";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import type { Availability, Booking, PromoCheck, TicketCategoryPublic } from "@/lib/types";
 
@@ -15,6 +16,7 @@ interface Props {
   onSale: boolean;
   saleMessage?: string;
   preview: { when: string; title: string; venue: string; year: string };
+  event: EventSummary;
 }
 
 const MESSAGES: Record<string, string> = {
@@ -43,11 +45,12 @@ const isPremium = (c: TicketCategoryPublic, all: TicketCategoryPublic[]) =>
 const isOut = (c: TicketCategoryPublic) => c.is_sold_out || c.available <= 0;
 const capFor = (c: TicketCategoryPublic, maxPerCustomer: number) => Math.max(0, Math.min(c.max_per_booking, c.available, maxPerCustomer));
 
-export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMessage, preview }: Props) {
+export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMessage, preview, event }: Props) {
   const router = useRouter();
   const [cats, setCats] = useState(categories);
   const [picked, setPicked] = useState<string | null>(null);
   const [wanted, setWanted] = useState(1);
+  const [reference, setReference] = useState<string | null>(null);
   const [promoText, setPromoText] = useState("");
   const [promo, setPromo] = useState<PromoCheck | null>(null);
   const [promoBusy, setPromoBusy] = useState(false);
@@ -134,7 +137,10 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
     const remember = () => { try { sessionStorage.setItem(storeKey, JSON.stringify({ cat: current.id, count, promo: promo?.code ?? promoText })); } catch {} };
     try {
       const b = await api<Booking>("bookings", { method: "POST", json: { event_slug: slug, items, promo_code: promo?.code ?? null, idempotency_key: keyRef.current.key } });
-      router.push(`/checkout/${b.reference}`);
+      // Pay right here, on the event page, instead of going to another page.
+      setReference(b.reference);
+      setBusy(false);
+      requestAnimationFrame(() => document.getElementById("checkout-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (e) {
       setBusy(false);
       if (e instanceof ApiError) {
@@ -150,10 +156,17 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
     return <p className="notice"><span>{saleMessage ?? "Tickets are not on sale right now."}</span></p>;
   }
 
+  // A hold that ended (or was closed): choosing again must make a new booking, not reuse the old key.
+  const restart = () => { keyRef.current = null; setReference(null); void refresh(); };
+
   return (
     <>
       <TicketPreview when={preview.when} title={preview.title} venue={preview.venue} ticket={current?.name ?? null} premium={!!current && isPremium(current, cats)} year={preview.year} admit={count} total={count ? inr(total) : null} />
 
+      {reference ? (
+        <CheckoutFlow reference={reference} embedded event={event} onRestart={restart} />
+      ) : (
+        <>
       <h3 className="step">1. Choose a ticket type</h3>
       <div className="types" role="radiogroup" aria-label="Ticket type">
         {cats.map((c) => {
@@ -231,6 +244,8 @@ export function TicketPicker({ slug, categories, maxPerCustomer, onSale, saleMes
           {error && <p className="err" role="alert">{error}</p>}
         </div>
       </div>
+        </>
+      )}
     </>
   );
 }

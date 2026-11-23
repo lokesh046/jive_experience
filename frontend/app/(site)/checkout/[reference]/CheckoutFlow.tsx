@@ -27,11 +27,25 @@ function loadRazorpay(): Promise<void> {
 
 const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
-export function CheckoutFlow({ reference }: { reference: string }) {
+function Shell({ embedded, children }: { embedded: boolean; children: React.ReactNode }) {
+  return embedded
+    ? <div className="co-embedded" id="checkout-panel" tabIndex={-1}>{children}</div>
+    : <main className="page"><div className="wrap">{children}</div></main>;
+}
+
+export type EventSummary = Pick<EventListItem, "slug" | "title" | "starts_at" | "timezone" | "venue_name" | "city">;
+
+/**
+ * Review and pay. It runs as its own page (/checkout/REF, used to come back to an unpaid booking) and,
+ * `embedded`, inside the event page's ticket section so buying never leaves the event.
+ */
+export function CheckoutFlow({
+  reference, embedded = false, event: eventProp, onRestart,
+}: { reference: string; embedded?: boolean; event?: EventSummary; onRestart?: () => void }) {
   const router = useRouter();
   const [view, setView] = useState<View>("loading");
   const [booking, setBooking] = useState<Booking | null>(null);
-  const [event, setEvent] = useState<EventListItem | null>(null);
+  const [event, setEvent] = useState<EventSummary | null>(eventProp ?? null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [left, setLeft] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,7 +53,7 @@ export function CheckoutFlow({ reference }: { reference: string }) {
   const [ticketsReady, setTicketsReady] = useState(false);
   const polling = useRef(false);
 
-  const toSignIn = useCallback(() => { rememberNext(`/checkout/${reference}`); router.replace("/signin"); }, [reference, router]);
+  const toSignIn = useCallback(() => { rememberNext(embedded && eventProp ? `/events/${eventProp.slug}#tickets` : `/checkout/${reference}`); router.replace("/signin"); }, [reference, router, embedded, eventProp]);
 
   const apply = useCallback((b: Booking) => {
     setBooking(b);
@@ -58,8 +72,10 @@ export function CheckoutFlow({ reference }: { reference: string }) {
         if (!live) return;
         setUser(u);
         apply(b);
-        const ev = (await eventsById()).get(b.event_id) ?? null;
-        if (live) setEvent(ev);
+        if (!eventProp) {
+          const ev = (await eventsById()).get(b.event_id) ?? null;
+          if (live) setEvent(ev);
+        }
       } catch (e) {
         if (!live) return;
         if (e instanceof ApiError && e.status === 401) return toSignIn();
@@ -69,7 +85,7 @@ export function CheckoutFlow({ reference }: { reference: string }) {
       }
     })();
     return () => { live = false; };
-  }, [reference, apply, toSignIn]);
+  }, [reference, apply, toSignIn, eventProp]);
 
   // Countdown to the hold's expiry, taken from the booking, never a fixed duration.
   useEffect(() => {
@@ -156,17 +172,17 @@ export function CheckoutFlow({ reference }: { reference: string }) {
   }
 
   const holdable = view === "review" || view === "failed";
+  const H = embedded ? "h3" : "h1";
 
   return (
-    <main className="page">
-      <div className="wrap">
+    <Shell embedded={embedded}>
         <div className="cols">
           <section aria-live="polite">
             {view === "loading" && <div className="skeleton" style={{ height: 56, maxWidth: 420 }} />}
 
             {view === "review" && booking && (
               <>
-                <h1>Review and pay</h1>
+                <H>Review and pay</H>
                 <p style={{ margin: "16px 0 36px" }}>Check your order, then pay securely with Razorpay. Your tickets appear in your account as soon as the payment is confirmed.</p>
                 {user && (
                   <div className="rows" style={{ marginBottom: 36 }}>
@@ -182,7 +198,7 @@ export function CheckoutFlow({ reference }: { reference: string }) {
 
             {view === "processing" && (
               <>
-                <h1>Confirming your payment</h1>
+                <H>Confirming your payment</H>
                 <p style={{ margin: "16px 0 28px" }}>This usually takes a few seconds. Please keep this page open and do not pay again.</p>
                 <div className="notice"><span>Waiting for the bank to confirm.</span></div>
                 {error && <p className="err" role="alert">{error}</p>}
@@ -191,7 +207,7 @@ export function CheckoutFlow({ reference }: { reference: string }) {
 
             {view === "failed" && (
               <>
-                <h1>The payment did not go through</h1>
+                <H>The payment did not go through</H>
                 <p style={{ margin: "16px 0 36px" }}>You have not been charged for this attempt. Your tickets are still held, so you can try again with the same method or another one.</p>
                 <button className="pill" type="button" onClick={pay} disabled={busy}>Try again</button>
               </>
@@ -199,7 +215,7 @@ export function CheckoutFlow({ reference }: { reference: string }) {
 
             {view === "confirmed" && booking && (
               <>
-                <h1>You are going</h1>
+                <H>You are going</H>
                 <p style={{ margin: "16px 0 28px" }}>Your payment is confirmed. Booking reference <span style={{ color: "#fff" }}>{booking.reference}</span>.</p>
                 {!ticketsReady && <div className="notice"><span>Preparing your tickets…</span></div>}
                 <div style={{ marginTop: 36 }}>
@@ -210,15 +226,17 @@ export function CheckoutFlow({ reference }: { reference: string }) {
 
             {view === "expired" && (
               <>
-                <h1>Your hold has ended</h1>
+                <H>Your hold has ended</H>
                 <p style={{ margin: "16px 0 36px" }}>The time to pay ran out and these tickets went back on sale. If you were charged, the payment will be returned to you.</p>
-                <Link className="pill" href={event ? `/events/${event.slug}#tickets` : "/#events"}>Choose tickets again</Link>
+                {embedded && onRestart
+                  ? <button className="pill" type="button" onClick={onRestart}>Choose tickets again</button>
+                  : <Link className="pill" href={event ? `/events/${event.slug}#tickets` : "/#events"}>Choose tickets again</Link>}
               </>
             )}
 
             {view === "closed" && (
               <>
-                <h1>This booking can no longer be paid</h1>
+                <H>This booking can no longer be paid</H>
                 <p style={{ margin: "16px 0 36px" }}>{error ?? "It has been cancelled or already handled."}</p>
                 <Link className="pill" href="/tickets">My tickets</Link>
               </>
@@ -226,7 +244,7 @@ export function CheckoutFlow({ reference }: { reference: string }) {
 
             {view === "unreachable" && (
               <>
-                <h1>We could not load your booking</h1>
+                <H>We could not load your booking</H>
                 <p style={{ margin: "16px 0 36px" }}>{error}</p>
                 <button className="pill" type="button" onClick={() => location.reload()}>Try again</button>
               </>
@@ -259,7 +277,6 @@ export function CheckoutFlow({ reference }: { reference: string }) {
             </aside>
           )}
         </div>
-      </div>
-    </main>
+    </Shell>
   );
 }

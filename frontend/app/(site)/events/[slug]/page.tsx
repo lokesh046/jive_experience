@@ -124,7 +124,7 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
             {e.on_sale && prices.length > 0 ? `From ${inr(Math.min(...prices))}` : ""}
           </p>
           {!e.on_sale && e.is_sold_out && !e.is_past && !cancelled && <WaitlistForm slug={e.slug} everythingGone soldOut={e.ticket_categories.map((c) => ({ id: c.id, name: c.name }))} />}
-          <TicketPicker slug={e.slug} categories={e.ticket_categories} maxPerCustomer={e.max_tickets_per_customer} onSale={e.on_sale} saleMessage={saleMessage} preview={{ when: `${longDate(e.starts_at, e.timezone)} · ${timeOf(e.starts_at, e.timezone)}`, title: e.title, venue: `${e.venue.name}, ${e.venue.city}`, year: String(new Date(e.starts_at).getFullYear()) }} />
+          <TicketPicker slug={e.slug} categories={e.ticket_categories} maxPerCustomer={e.max_tickets_per_customer} onSale={e.on_sale} saleMessage={saleMessage} event={{ slug: e.slug, title: e.title, starts_at: e.starts_at, timezone: e.timezone, venue_name: e.venue.name, city: e.venue.city }} preview={{ when: `${longDate(e.starts_at, e.timezone)} · ${timeOf(e.starts_at, e.timezone)}`, title: e.title, venue: `${e.venue.name}, ${e.venue.city}`, year: String(new Date(e.starts_at).getFullYear()) }} />
         </section>
 
         <EventLocation venue={e.venue} locationUrl={e.location_url} />

@@ -753,3 +753,7 @@ footer.site .wrap { flex-wrap: wrap; }
 @keyframes livepulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .sc-chip.live i { animation: none; } }
 .sc-top small { display: block; }
+
+/* checkout inside the event page */
+.co-embedded { outline: 0; scroll-margin-top: 120px; }
+.co-embedded h3 { font-size: 30px; }
