@@ -358,3 +358,10 @@ export interface Campaign {
   id: string; subject: string; body: string; event_id: string | null; button_label: string | null; button_url: string | null;
   status: "DRAFT" | "SENT"; sent_at: string | null; recipients: number; delivered: number; pending: number; failed: number; created_at: string;
 }
+
+export interface AppNotification {
+  id: string; kind: string; category: string; severity: "info" | "warn" | "critical";
+  title: string; body: string | null; link: string | null; read: boolean; created_at: string;
+}
+export interface NotificationFeed { items: AppNotification[]; unread: number; next_before: string | null }
+export interface NotificationPreference { category: string; label: string; description: string; in_app: boolean; email: boolean; email_choice: boolean }

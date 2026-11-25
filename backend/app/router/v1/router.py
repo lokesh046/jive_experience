@@ -26,6 +26,7 @@ from app.router.v1 import (
     box_office,
     events,
     leads,
+    notifications,
     scanner,
     system,
     users,
@@ -43,6 +44,7 @@ api_router.include_router(bookings.tickets_router, prefix="/tickets")
 api_router.include_router(bookings.webhook_router, prefix="/payments")
 api_router.include_router(leads.router)
 api_router.include_router(artists.router)
+api_router.include_router(notifications.router, prefix="/notifications")
 api_router.include_router(archive.router)
 
 # Event staff scanner.

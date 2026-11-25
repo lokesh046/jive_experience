@@ -18,7 +18,7 @@ const REFRESH_DAYS = 30;
 const IS_PROD = process.env.NODE_ENV === "production";
 
 // Only these backend areas are reachable from the browser.
-const ALLOWED = ["events", "auth", "users", "bookings", "tickets", "scanner", "box-office", "admin", "enquiries", "newsletter", "waitlist"];
+const ALLOWED = ["events", "auth", "users", "bookings", "tickets", "scanner", "box-office", "notifications", "admin", "enquiries", "newsletter", "waitlist"];
 
 interface TokenPair {
   access_token: string;

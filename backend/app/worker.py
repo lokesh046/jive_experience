@@ -39,6 +39,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.core.redis import close_redis, create_redis, get_redis
 from app.db.session import create_engine, dispose_engine, get_sessionmaker
+from app.models.commerce import Booking, RefundStatus
 from app.models.fulfilment import OutboxMessage
 from app.repositories.fulfilment import OutboxRepository
 from app.services.abandoned import AbandonedBookingService
@@ -47,6 +48,8 @@ from app.services.cache import CatalogueCache
 from app.services.catalogue import CatalogueService
 from app.services.inventory import InventoryService
 from app.services.notification import NotificationService
+from app.services.notification_center import NotificationCenter
+from app.services.notify_events import Notifier
 from app.services.outbox import (
     TOPIC_BOOKING_ABANDONED,
     TOPIC_BOOKING_CANCELLED,
@@ -56,6 +59,7 @@ from app.services.outbox import (
     TOPIC_EVENT_CANCELLED,
     TOPIC_NEWSLETTER_SEND,
     TOPIC_NEWSLETTER_SUBSCRIBED,
+    TOPIC_NOTIFICATION_EMAIL,
     TOPIC_PAYMENT_CAPTURED,
     TOPIC_REFUND_COMPLETED,
     TOPIC_REFUND_PROCESS,
@@ -92,6 +96,9 @@ async def handle_booking_confirmed(session: AsyncSession, payload: dict[str, Any
     tickets = TicketService(session, outbox)
     issued = await tickets.issue_for_booking(booking_id)
     logger.info("booking_confirmed_handled", booking_id=str(booking_id), tickets=len(issued))
+    booking = await session.get(Booking, booking_id)
+    if booking is not None:
+        await Notifier(session).sales_progress(booking.event_id)
 
 
 async def handle_payment_captured(session: AsyncSession, payload: dict[str, Any]) -> None:
@@ -125,6 +132,7 @@ async def handle_tickets_issued(session: AsyncSession, payload: dict[str, Any]) 
     notifications = NotificationService(session, settings, TicketService(session, outbox))
     sent = await notifications.send_tickets(uuid.UUID(payload["booking_id"]))
     logger.info("tickets_email_handled", booking_id=payload.get("booking_id"), sent=sent)
+    await Notifier(session).tickets_ready(uuid.UUID(payload["booking_id"]))
 
 
 async def handle_refund_process(session: AsyncSession, payload: dict[str, Any]) -> None:
@@ -135,6 +143,8 @@ async def handle_refund_process(session: AsyncSession, payload: dict[str, Any]) 
     refunds = RefundService(session, settings, provider, outbox)
     status = await refunds.process_pending(uuid.UUID(payload["refund_id"]))
     logger.info("refund_processed", refund_id=payload["refund_id"], status=status.value)
+    if status is RefundStatus.FAILED:
+        await Notifier(session).refund_failed(uuid.UUID(payload["refund_id"]))
 
 
 async def handle_event_cancelled(session: AsyncSession, payload: dict[str, Any]) -> None:
@@ -170,6 +180,7 @@ async def handle_event_cancelled(session: AsyncSession, payload: dict[str, Any])
 async def handle_enquiry_received(session: AsyncSession, payload: dict[str, Any]) -> None:
     sent = await _notifications(session).send_enquiry(uuid.UUID(payload["enquiry_id"]))
     logger.info("enquiry_email_handled", enquiry_id=payload["enquiry_id"], sent=sent)
+    await Notifier(session).enquiry_received(uuid.UUID(payload["enquiry_id"]))
 
 
 async def handle_newsletter_subscribed(session: AsyncSession, payload: dict[str, Any]) -> None:
@@ -191,14 +202,21 @@ async def handle_booking_abandoned(session: AsyncSession, payload: dict[str, Any
     logger.info("abandoned_email_handled", booking_id=payload["booking_id"], sent=sent)
 
 
+async def handle_notification_email(session: AsyncSession, payload: dict[str, Any]) -> None:
+    sent = await _notifications(session).send_alert_email(uuid.UUID(payload["notification_id"]))
+    logger.info("alert_email_handled", notification_id=payload["notification_id"], sent=sent)
+
+
 async def handle_waitlist_available(session: AsyncSession, payload: dict[str, Any]) -> None:
     sent = await _notifications(session).send_waitlist_available(uuid.UUID(payload["entry_id"]))
     logger.info("waitlist_email_handled", entry_id=payload["entry_id"], sent=sent)
+    await Notifier(session).waitlist_available(uuid.UUID(payload["entry_id"]))
 
 
 async def handle_booking_reminder(session: AsyncSession, payload: dict[str, Any]) -> None:
     sent = await _notifications(session).send_reminder(uuid.UUID(payload["booking_id"]))
     logger.info("reminder_email_handled", booking_id=payload["booking_id"], sent=sent)
+    await Notifier(session).event_reminder(uuid.UUID(payload["booking_id"]))
 
 
 def _notifications(session: AsyncSession) -> NotificationService:
@@ -209,11 +227,13 @@ def _notifications(session: AsyncSession) -> NotificationService:
 async def handle_booking_cancelled(session: AsyncSession, payload: dict[str, Any]) -> None:
     sent = await _notifications(session).send_cancellation(uuid.UUID(payload["booking_id"]))
     logger.info("cancellation_email_handled", booking_id=payload["booking_id"], sent=sent)
+    await Notifier(session).booking_cancelled(uuid.UUID(payload["booking_id"]))
 
 
 async def handle_refund_completed(session: AsyncSession, payload: dict[str, Any]) -> None:
     sent = await _notifications(session).send_refund(uuid.UUID(payload["refund_id"]))
     logger.info("refund_email_handled", refund_id=payload["refund_id"], sent=sent)
+    await Notifier(session).refund_completed(uuid.UUID(payload["refund_id"]))
 
 
 HANDLERS: dict[str, Handler] = {
@@ -229,6 +249,7 @@ HANDLERS: dict[str, Handler] = {
     TOPIC_NEWSLETTER_SUBSCRIBED: handle_newsletter_subscribed,
     TOPIC_NEWSLETTER_SEND: handle_newsletter_send,
     TOPIC_BOOKING_ABANDONED: handle_booking_abandoned,
+    TOPIC_NOTIFICATION_EMAIL: handle_notification_email,
     TOPIC_REFUND_COMPLETED: handle_refund_completed,
 }
 
@@ -244,6 +265,8 @@ class Worker:
         self._last_reminder_sweep = 0.0
         self._last_waitlist_sweep = 0.0
         self._last_abandoned_sweep = 0.0
+        self._last_prune = 0.0
+        self._last_doors_sweep = 0.0
 
     def request_stop(self) -> None:
         """Finish the message in hand, then exit."""
@@ -317,6 +340,8 @@ class Worker:
             await session.rollback()
             if attempts >= max_attempts:
                 await repository.mark_failed(message_id, error=str(exc))
+                if topic != TOPIC_NOTIFICATION_EMAIL:  # an alert about an alert would loop
+                    await Notifier(session).gave_up(topic, str(exc), message_id)
                 await session.commit()
                 log.error("outbox_message_failed_permanently", error=str(exc))
                 return
@@ -387,6 +412,18 @@ class Worker:
             asked = await AbandonedBookingService(session, outbox).queue_due(datetime.now(UTC))
             if asked:
                 logger.info("abandoned_reminders_queued", count=asked)
+
+        # 4c. Doors opening soon for the people working the night, and old notifications cleared.
+        if time.monotonic() - self._last_doors_sweep >= 300:
+            self._last_doors_sweep = time.monotonic()
+            told = await Notifier(session).doors_open_soon(datetime.now(UTC))
+            await session.commit()
+            if told:
+                logger.info("doors_notifications_sent", count=told)
+        if time.monotonic() - self._last_prune >= 6 * 3600:
+            self._last_prune = time.monotonic()
+            await NotificationCenter(session, outbox).prune()
+            await session.commit()
 
         # 5. Waitlists: tickets that have come back since the last look.
         if time.monotonic() - self._last_waitlist_sweep >= settings.waitlist_sweep_interval_seconds:

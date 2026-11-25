@@ -24,6 +24,7 @@ from app.core.money import format_inr
 from app.models.commerce import Booking, BookingStatus
 from app.models.event import Event, EventStatus
 from app.models.fulfilment import TicketStatus
+from app.models.notification import Notification
 from app.models.user import User
 from app.models.waitlist import WaitlistStatus
 from app.repositories.catalogue import EventRepository
@@ -35,6 +36,7 @@ from app.repositories.user import UserRepository
 from app.repositories.waitlist import WaitlistRepository
 from app.services.abandoned import abandoned_emails_enabled
 from app.services.newsletter_mail import build_campaign_mail
+from app.services.notification_center import NotificationCenter
 from app.services.outbox import TOPIC_BOOKING_REMINDER
 from app.services.ticket import TicketService
 
@@ -118,6 +120,9 @@ class NotificationService:
         rows = list(await self.ticket_rows.for_booking(booking.id))
         if reminder:
             if booking.status is not BookingStatus.CONFIRMED:
+                return False
+            # A customer can turn reminder emails off; ticket emails are never optional.
+            if not await NotificationCenter(self.session).email_wanted(user.id, "reminders"):
                 return False
             rows = [row for row in rows if row.status is TicketStatus.ISSUED]
         if not rows:
@@ -488,6 +493,39 @@ class NotificationService:
         logger.info("abandoned_email_sent", booking_id=str(booking.id))
         return True
 
+    async def send_alert_email(self, notification_id: uuid.UUID) -> bool:
+        """The email copy of an alert, for an admin or gate-staff member who asked for it."""
+        if not self.settings.email_configured:
+            logger.warning("email_not_configured_skipping_alert", id=str(notification_id))
+            return False
+        note = await self.session.get(Notification, notification_id)
+        if note is None:
+            return False
+        user = await self.users.get(note.user_id)
+        if user is None or user.email.endswith(".invalid"):
+            return False
+        base = self.settings.public_site_url.rstrip("/")
+        link = f"{base}{note.link}" if note.link else base
+        body = note.body or ""
+        mail = Mail(
+            to=user.email,
+            subject=f"[JIVE] {note.title}",
+            text=f"{note.title}\n\n{body}\n\n{link}\n",
+            html=(
+                "<div style='font:16px/1.55 Arial,sans-serif;max-width:520px;color:#111'>"
+                f"<p style='font-size:18px;font-weight:600;margin:0 0 8px'>{escape(note.title)}</p>"
+                f"<p style='margin:0 0 16px'>{escape(body)}</p>"
+                f"<p><a href='{escape(link)}' style='display:inline-block;padding:12px 22px;"
+                "background:#111;color:#fff;border-radius:999px;text-decoration:none'>"
+                "Open</a></p>"
+                "<p style='color:#777;font-size:12px'>You get this because alert emails are on for "
+                "this kind of alert. You can change that in your notification settings.</p></div>"
+            ),
+        )
+        await mailer.send_mail(self.settings, mail)
+        logger.info("alert_email_sent", notification_id=str(note.id))
+        return True
+
     async def send_waitlist_available(self, entry_id: uuid.UUID) -> bool:
         """Tell someone on the waitlist that tickets are back on sale."""
         if not self.settings.email_configured:
@@ -498,6 +536,11 @@ class NotificationService:
             return False
         event = await self.events.get(entry.event_id)
         if event is None:
+            return False
+        account = await self.users.by_email(entry.email)
+        if account is not None and not await NotificationCenter(self.session).email_wanted(
+            account.id, "waitlist"
+        ):
             return False
         await self.session.refresh(event, attribute_names=["venue"])
         zone = ZoneInfo(event.timezone or self.settings.default_timezone)

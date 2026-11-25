@@ -40,6 +40,7 @@ from app.repositories.commerce import (
 )
 from app.services.audit import AuditService
 from app.services.booking import BookingService
+from app.services.notify_events import Notifier
 from app.services.outbox import TOPIC_PAYMENT_CAPTURED, OutboxService
 from app.services.payment_provider import (
     CheckoutOrder,
@@ -265,6 +266,7 @@ class PaymentService:
         booking.status = BookingStatus.CANCELLED
         booking.cancelled_at = datetime.now(UTC)
         booking.cancellation_reason = RefundReason.INVENTORY_UNAVAILABLE.value
+        await Notifier(self.session).payment_without_seats(booking.id)
         await self.session.commit()
 
     async def finalise_captured(self, payment_id: uuid.UUID) -> None:
@@ -429,7 +431,9 @@ class PaymentService:
                 verified = await self._verified_for(provider_payment_id, provider_order_id)
                 if verified is None:
                     continue
-                await self.confirm_from_provider(verified, source="reconciliation")
+                recovered = await self.confirm_from_provider(verified, source="reconciliation")
+                if recovered is not None and recovered.status is BookingStatus.CONFIRMED:
+                    await Notifier(self.session).payment_recovered(recovered.id)
                 refreshed = await self.payments.get(payment_id)
                 if refreshed is not None:
                     refreshed.reconciled_at = datetime.now(UTC)

@@ -385,6 +385,10 @@ class TicketService:
                 device_label=device_label,
             )
         )
+        if ticket is not None and result.value in ("ALREADY_USED", "CANCELLED", "REFUNDED"):
+            from app.services.notify_events import Notifier  # (imported here: it imports services)
+
+            await Notifier(self.session).suspicious_scan(event_id, ticket.serial, result.value)
         await self.session.commit()
         if ticket is not None:
             await self.session.refresh(ticket)

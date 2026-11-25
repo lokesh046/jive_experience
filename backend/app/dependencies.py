@@ -40,6 +40,7 @@ from app.services.google_oauth import GoogleOAuthClient
 from app.services.inventory import InventoryService
 from app.services.leads import LeadService
 from app.services.newsletter import NewsletterService
+from app.services.notification_center import NotificationCenter
 from app.services.outbox import OutboxService
 from app.services.payment import PaymentService
 from app.services.payment_provider import PaymentProvider, get_payment_provider
@@ -164,6 +165,12 @@ def get_newsletter_service(
     return NewsletterService(session, settings, outbox)
 
 
+def get_notification_center(
+    session: DbSession, outbox: Annotated[OutboxService, Depends(get_outbox_service)]
+) -> NotificationCenter:
+    return NotificationCenter(session, outbox)
+
+
 def get_archive_service(session: DbSession) -> ArchiveService:
     return ArchiveService(session)
 
@@ -245,6 +252,7 @@ PromoServiceDep = Annotated[PromoService, Depends(get_promo_service)]
 ArtistServiceDep = Annotated[ArtistService, Depends(get_artist_service)]
 ArchiveServiceDep = Annotated[ArchiveService, Depends(get_archive_service)]
 NewsletterServiceDep = Annotated[NewsletterService, Depends(get_newsletter_service)]
+NotificationCenterDep = Annotated[NotificationCenter, Depends(get_notification_center)]
 SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]
 
 

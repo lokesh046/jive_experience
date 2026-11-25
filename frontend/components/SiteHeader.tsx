@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ProfileMenu } from "@/components/ProfileMenu";
 import { RoleLinks } from "@/components/RoleLinks";
 
@@ -18,6 +19,7 @@ export function SiteHeader() {
           <Link className="search" href="/events#search" aria-label="Search events">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           </Link>
+          <NotificationBell />
           <ProfileMenu />
         </div>
       </nav>

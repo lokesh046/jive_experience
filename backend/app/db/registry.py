@@ -30,6 +30,7 @@ from app.models.fulfilment import (  # noqa: F401
 )
 from app.models.lead import Enquiry, NewsletterSubscriber  # noqa: F401
 from app.models.newsletter_campaign import NewsletterCampaign  # noqa: F401
+from app.models.notification import Notification, NotificationPreference  # noqa: F401
 from app.models.promo import PromoCode  # noqa: F401
 from app.models.refresh_token import RefreshToken  # noqa: F401
 from app.models.site_setting import SiteSetting  # noqa: F401
