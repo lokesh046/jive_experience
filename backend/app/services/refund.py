@@ -42,7 +42,12 @@ from app.models.fulfilment import TicketStatus
 from app.models.site_setting import DEFAULT_CANCELLATION_POLICY
 from app.models.user import User
 from app.repositories.catalogue import EventRepository
-from app.repositories.commerce import BookingRepository, PaymentRepository, RefundRepository
+from app.repositories.commerce import (
+    BookingRepository,
+    InventoryRepository,
+    PaymentRepository,
+    RefundRepository,
+)
 from app.repositories.fulfilment import TicketRepository
 from app.repositories.site_setting import SiteSettingRepository
 from app.services.audit import AuditService
@@ -82,6 +87,7 @@ class RefundService:
         self.refunds = RefundRepository(session)
         self.payments = PaymentRepository(session)
         self.bookings = BookingRepository(session)
+        self.inventory = InventoryRepository(session)
         self.tickets = TicketRepository(session)
         self.events = EventRepository(session)
         self.site_settings = SiteSettingRepository(session)
@@ -277,9 +283,15 @@ class RefundService:
                 actor=actor,
             )
 
+        # Seats a confirmed booking was holding go back on sale: the tickets are void now, so
+        # leaving them counted as sold would hide seats that nobody can use.
+        was_sold = booking.status in (BookingStatus.CONFIRMED, BookingStatus.PARTIALLY_REFUNDED)
         booking.status = BookingStatus.CANCELLED
         booking.cancelled_at = datetime.now(UTC)
         booking.cancellation_reason = reason.value
+        if was_sold:
+            for item in await self.bookings.items(booking.id):
+                await self.inventory.return_sold(item.ticket_category_id, item.quantity)
 
         # Tickets are void from the moment the booking is cancelled — waiting
         # for the money to settle would let someone walk in on a cancelled
