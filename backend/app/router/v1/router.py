@@ -15,6 +15,7 @@ from app.router.v1 import (
     admin_catalogue,
     admin_commerce,
     admin_leads,
+    admin_newsletters,
     admin_promos,
     admin_reports,
     admin_settings,
@@ -56,6 +57,7 @@ api_router.include_router(admin_leads.router, prefix="/admin")
 api_router.include_router(admin_promos.router, prefix="/admin")
 api_router.include_router(admin_artists.router, prefix="/admin")
 api_router.include_router(admin_archive.router, prefix="/admin")
+api_router.include_router(admin_newsletters.router, prefix="/admin")
 api_router.include_router(admin_settings.router, prefix="/admin")
 
 # Still to come:

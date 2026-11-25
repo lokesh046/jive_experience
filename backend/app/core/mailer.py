@@ -32,6 +32,7 @@ class Mail:
     text: str
     html: str
     images: list[InlineImage] = field(default_factory=list)
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 def build_message(settings: Settings, mail: Mail) -> EmailMessage:
@@ -40,6 +41,8 @@ def build_message(settings: Settings, mail: Mail) -> EmailMessage:
     message["From"] = formataddr((settings.mail_from_name, settings.mail_from))
     message["To"] = mail.to
     message["Subject"] = mail.subject
+    for name, value in mail.headers.items():
+        message[name] = value
     message["Message-ID"] = make_msgid(domain=settings.mail_from.split("@")[-1])
     message.set_content(mail.text)
     message.add_alternative(mail.html, subtype="html")

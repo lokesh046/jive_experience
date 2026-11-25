@@ -6,13 +6,14 @@ import asyncio
 import io
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from html import escape
 from zoneinfo import ZoneInfo
 
 import qrcode
 import structlog
 from qrcode.constants import ERROR_CORRECT_M
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import mailer
@@ -29,8 +30,11 @@ from app.repositories.catalogue import EventRepository
 from app.repositories.commerce import BookingRepository, RefundRepository
 from app.repositories.fulfilment import TicketRepository
 from app.repositories.lead import EnquiryRepository, SubscriberRepository
+from app.repositories.newsletter import CampaignRepository
 from app.repositories.user import UserRepository
 from app.repositories.waitlist import WaitlistRepository
+from app.services.abandoned import abandoned_emails_enabled
+from app.services.newsletter_mail import build_campaign_mail
 from app.services.outbox import TOPIC_BOOKING_REMINDER
 from app.services.ticket import TicketService
 
@@ -70,6 +74,7 @@ class NotificationService:
         self.enquiries = EnquiryRepository(session)
         self.subscribers = SubscriberRepository(session)
         self.waitlist = WaitlistRepository(session)
+        self.campaigns = CampaignRepository(session)
 
     async def send_tickets(self, booking_id: uuid.UUID) -> bool:
         """Email the tickets for a booking. Returns False when email is off."""
@@ -380,6 +385,107 @@ class NotificationService:
         )
         await mailer.send_mail(self.settings, mail)
         logger.info("newsletter_welcome_sent", subscriber_id=str(subscriber.id))
+        return True
+
+    async def send_campaign(self, campaign_id: uuid.UUID, subscriber_id: uuid.UUID) -> bool:
+        """One subscriber's copy of a newsletter issue."""
+        if not self.settings.email_configured:
+            logger.warning("email_not_configured_skipping_newsletter", campaign_id=str(campaign_id))
+            return False
+        campaign = await self.campaigns.get(campaign_id)
+        subscriber = await self.subscribers.get(subscriber_id)
+        # Someone who unsubscribed after the issue was queued must not get it.
+        if campaign is None or subscriber is None or not subscriber.subscribed:
+            return False
+        event = await self.events.get(campaign.event_id) if campaign.event_id else None
+        base = self.settings.public_site_url.rstrip("/")
+        mail = build_campaign_mail(
+            self.settings,
+            campaign,
+            event,
+            to=subscriber.email,
+            unsubscribe_url=f"{base}/unsubscribe?token={subscriber.unsubscribe_token}",
+        )
+        await mailer.send_mail(self.settings, mail)
+        await self.campaigns.count_delivered(campaign.id)
+        return True
+
+    async def send_abandoned(self, booking_id: uuid.UUID) -> bool:
+        """ "You left before paying": one email, only if coming back would still work."""
+        if not self.settings.email_configured:
+            logger.warning("email_not_configured_skipping_abandoned", booking_id=str(booking_id))
+            return False
+        booking = await self.bookings.get(booking_id)
+        if booking is None or booking.status is not BookingStatus.EXPIRED:
+            return False
+        user = await self.users.get(booking.user_id)
+        event = await self.events.get(booking.event_id)
+        if user is None or event is None or user.email.endswith(".invalid"):
+            return False
+        if not await abandoned_emails_enabled(self.session):
+            return False
+        now = datetime.now(UTC)
+        if (
+            event.status is not EventStatus.PUBLISHED
+            or event.starts_at <= now
+            or (event.sale_ends_at is not None and event.sale_ends_at <= now)
+            or (event.sale_starts_at is not None and event.sale_starts_at > now)
+        ):
+            return False
+        # They may have bought in the meantime, from this booking's twin or at the counter.
+        bought = await self.session.scalar(
+            select(Booking.id)
+            .where(
+                Booking.user_id == booking.user_id,
+                Booking.event_id == booking.event_id,
+                Booking.status.in_([BookingStatus.CONFIRMED, BookingStatus.PARTIALLY_REFUNDED]),
+            )
+            .limit(1)
+        )
+        if bought is not None:
+            return False
+
+        await self.session.refresh(event, attribute_names=["venue", "ticket_categories"])
+        wanted = {c.id: c for c in event.ticket_categories}
+        lines: list[str] = []
+        for item in await self.bookings.items(booking.id):
+            category = wanted.get(item.ticket_category_id)
+            if category is None or not category.is_active or category.available < item.quantity:
+                continue
+            lines.append(
+                f"{item.quantity} x {category.name} ({format_inr(category.price_paise)} each)"
+            )
+        if not lines:
+            return False  # what they wanted has sold out: nothing useful to say
+
+        zone = ZoneInfo(event.timezone or self.settings.default_timezone)
+        when = event.starts_at.astimezone(zone).strftime("%a %d %b %Y, %I:%M %p").replace(" 0", " ")
+        page = f"{self.settings.public_site_url.rstrip('/')}/events/{event.slug}#tickets"
+        name = (user.full_name or "").split(" ")[0] or "there"
+        title = escape(event.title)
+        mail = Mail(
+            to=user.email,
+            subject=f"Still thinking about {event.title}?",
+            text=(
+                f"Hi {name}, you started booking {event.title} ({when}) but did not finish.\n\n"
+                + "\n".join(lines)
+                + f"\n\nTickets are first come, first served and we cannot hold them: {page}\n"
+            ),
+            html=(
+                "<div style='font:16px/1.55 Arial,sans-serif;max-width:520px;color:#111'>"
+                f"<p>Hi {escape(name)}, you started booking <b>{title}</b> "
+                f"({escape(when)}) but did not finish.</p><ul>"
+                + "".join(f"<li>{escape(line)}</li>" for line in lines)
+                + "</ul><p>Tickets are first come, first served and we cannot hold them.</p>"
+                f"<p><a href='{escape(page)}' style='display:inline-block;padding:12px 22px;"
+                "background:#111;color:#fff;border-radius:999px;text-decoration:none'>"
+                "Pick up where you left off</a></p>"
+                "<p style='color:#777;font-size:12px'>One reminder only, because you started a "
+                "booking on our site.</p></div>"
+            ),
+        )
+        await mailer.send_mail(self.settings, mail)
+        logger.info("abandoned_email_sent", booking_id=str(booking.id))
         return True
 
     async def send_waitlist_available(self, entry_id: uuid.UUID) -> bool:

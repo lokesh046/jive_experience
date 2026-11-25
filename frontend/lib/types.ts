@@ -354,3 +354,7 @@ export interface Promo {
 
 export interface ArtistAdmin { id: string; name: string; note: string | null; photo_url: string | null; show_on_home: boolean; sort_order: number }
 export interface ArchiveAdmin { id: string; caption: string | null; photo_url: string; show_on_home: boolean; sort_order: number }
+export interface Campaign {
+  id: string; subject: string; body: string; event_id: string | null; button_label: string | null; button_url: string | null;
+  status: "DRAFT" | "SENT"; sent_at: string | null; recipients: number; delivered: number; pending: number; failed: number; created_at: string;
+}

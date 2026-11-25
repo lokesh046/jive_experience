@@ -1011,3 +1011,17 @@ select option { background: #111; }
 .ar-ctl .mv button { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--field); background: none; color: var(--fg); cursor: pointer; }
 .ar-ctl .mv button:disabled { opacity: 0.35; cursor: default; }
 @media (max-width: 700px) { .ar-row { grid-template-columns: 56px 1fr; } .ar-pic { width: 56px; height: 70px; } .ar-ctl { grid-column: 1 / -1; justify-content: flex-start; } .ar-ctl .mv button { width: 40px; height: 40px; } }
+
+/* Newsletters */
+.nl-cols { display: grid; grid-template-columns: 1fr 380px; gap: 40px; align-items: start; }
+.nl-fields { display: grid; gap: 20px; min-width: 0; }
+.nl-fields textarea { min-height: 220px; line-height: 26px; }
+.nl-prev { background: #fff; color: #111; border-radius: 22px; padding: 28px; font: 15px/1.6 Arial, sans-serif; position: sticky; top: 124px; }
+.nl-prev p { color: #111; margin: 0 0 14px; }
+.nl-prev .hint { color: #888; }
+.nl-logo { font: 400 24px Georgia, serif !important; margin-bottom: 18px !important; }
+.nl-card { border: 1px solid #e5e5e5; border-radius: 16px; padding: 14px 16px; margin: 4px 0 18px; display: grid; gap: 2px; }
+.nl-card b { font-size: 17px; } .nl-card span { color: #666; font-size: 13px; }
+.nl-btn { display: inline-block; background: #111; color: #fff; border-radius: 999px; padding: 11px 22px; font-weight: 600; margin: 4px 0 18px; }
+.nl-prev .nl-foot { color: #888; font-size: 11px; margin: 10px 0 0; }
+@media (max-width: 1000px) { .nl-cols { grid-template-columns: 1fr; } .nl-prev { position: static; } }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from app.dependencies import RequireAdmin, SettingsServiceDep
 from app.schemas.policy import CancellationPolicy, DefaultPolicyIn, DefaultPolicyOut
@@ -33,3 +34,21 @@ async def set_default_policy(
     return DefaultPolicyOut(
         policy=payload.policy if payload.policy and payload.policy.tiers else None
     )
+
+
+class EmailSettings(BaseModel):
+    abandoned_emails: bool
+
+
+@router.get("/settings/emails", response_model=EmailSettings, summary="Automatic emails")
+async def get_email_settings(actor: RequireAdmin, service: SettingsServiceDep) -> EmailSettings:
+    return EmailSettings(abandoned_emails=await service.abandoned_emails())
+
+
+@router.put("/settings/emails", response_model=EmailSettings, summary="Switch automatic emails")
+async def set_email_settings(
+    payload: EmailSettings, actor: RequireAdmin, service: SettingsServiceDep
+) -> EmailSettings:
+    """Today: the one-time "you left before paying" email."""
+    await service.set_abandoned_emails(payload.abandoned_emails, actor=actor)
+    return payload

@@ -204,6 +204,9 @@ class Booking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
 
+    # Set when a "you left before paying" email was queued, so it is sent at most once.
+    abandoned_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     items: Mapped[list[BookingItem]] = relationship(
         back_populates="booking", cascade="all, delete-orphan", lazy="selectin"
     )

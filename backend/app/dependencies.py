@@ -39,6 +39,7 @@ from app.services.catalogue import CatalogueService
 from app.services.google_oauth import GoogleOAuthClient
 from app.services.inventory import InventoryService
 from app.services.leads import LeadService
+from app.services.newsletter import NewsletterService
 from app.services.outbox import OutboxService
 from app.services.payment import PaymentService
 from app.services.payment_provider import PaymentProvider, get_payment_provider
@@ -155,6 +156,14 @@ def get_waitlist_service(
     return WaitlistService(session, outbox)
 
 
+def get_newsletter_service(
+    session: DbSession,
+    settings: AppSettings,
+    outbox: Annotated[OutboxService, Depends(get_outbox_service)],
+) -> NewsletterService:
+    return NewsletterService(session, settings, outbox)
+
+
 def get_archive_service(session: DbSession) -> ArchiveService:
     return ArchiveService(session)
 
@@ -235,6 +244,7 @@ WaitlistServiceDep = Annotated[WaitlistService, Depends(get_waitlist_service)]
 PromoServiceDep = Annotated[PromoService, Depends(get_promo_service)]
 ArtistServiceDep = Annotated[ArtistService, Depends(get_artist_service)]
 ArchiveServiceDep = Annotated[ArchiveService, Depends(get_archive_service)]
+NewsletterServiceDep = Annotated[NewsletterService, Depends(get_newsletter_service)]
 SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]
 
 

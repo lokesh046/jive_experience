@@ -11,6 +11,8 @@ from app.models.user import User
 from app.repositories.catalogue import EventRepository
 from app.repositories.site_setting import SiteSettingRepository
 from app.schemas.policy import CancellationPolicy
+from app.services.abandoned import SETTING_KEY as ABANDONED_KEY
+from app.services.abandoned import abandoned_emails_enabled
 from app.services.audit import AuditService
 from app.services.cache import CatalogueCache
 
@@ -45,3 +47,18 @@ class SettingsService:
         # Every event page that shows the default policy must be rebuilt.
         slugs = list(await self.events.public_slugs())
         await self.cache.invalidate_details(slugs)
+
+    async def abandoned_emails(self) -> bool:
+        return await abandoned_emails_enabled(self.session)
+
+    async def set_abandoned_emails(self, enabled: bool, *, actor: User) -> None:
+        before = await self.abandoned_emails()
+        await self.settings.put(ABANDONED_KEY, {"enabled": enabled}, updated_by=actor.id)
+        await self.audit.record(
+            "settings.abandoned_emails_changed",
+            entity_type="site_setting",
+            actor=actor,
+            before={"enabled": before},
+            after={"enabled": enabled},
+        )
+        await self.session.commit()

@@ -41,17 +41,20 @@ from app.core.redis import close_redis, create_redis, get_redis
 from app.db.session import create_engine, dispose_engine, get_sessionmaker
 from app.models.fulfilment import OutboxMessage
 from app.repositories.fulfilment import OutboxRepository
+from app.services.abandoned import AbandonedBookingService
 from app.services.booking import BookingService
 from app.services.cache import CatalogueCache
 from app.services.catalogue import CatalogueService
 from app.services.inventory import InventoryService
 from app.services.notification import NotificationService
 from app.services.outbox import (
+    TOPIC_BOOKING_ABANDONED,
     TOPIC_BOOKING_CANCELLED,
     TOPIC_BOOKING_CONFIRMED,
     TOPIC_BOOKING_REMINDER,
     TOPIC_ENQUIRY_RECEIVED,
     TOPIC_EVENT_CANCELLED,
+    TOPIC_NEWSLETTER_SEND,
     TOPIC_NEWSLETTER_SUBSCRIBED,
     TOPIC_PAYMENT_CAPTURED,
     TOPIC_REFUND_COMPLETED,
@@ -176,6 +179,18 @@ async def handle_newsletter_subscribed(session: AsyncSession, payload: dict[str,
     logger.info("newsletter_welcome_handled", subscriber_id=payload["subscriber_id"], sent=sent)
 
 
+async def handle_newsletter_send(session: AsyncSession, payload: dict[str, Any]) -> None:
+    sent = await _notifications(session).send_campaign(
+        uuid.UUID(payload["campaign_id"]), uuid.UUID(payload["subscriber_id"])
+    )
+    logger.info("newsletter_email_handled", subscriber_id=payload["subscriber_id"], sent=sent)
+
+
+async def handle_booking_abandoned(session: AsyncSession, payload: dict[str, Any]) -> None:
+    sent = await _notifications(session).send_abandoned(uuid.UUID(payload["booking_id"]))
+    logger.info("abandoned_email_handled", booking_id=payload["booking_id"], sent=sent)
+
+
 async def handle_waitlist_available(session: AsyncSession, payload: dict[str, Any]) -> None:
     sent = await _notifications(session).send_waitlist_available(uuid.UUID(payload["entry_id"]))
     logger.info("waitlist_email_handled", entry_id=payload["entry_id"], sent=sent)
@@ -212,6 +227,8 @@ HANDLERS: dict[str, Handler] = {
     TOPIC_ENQUIRY_RECEIVED: handle_enquiry_received,
     TOPIC_WAITLIST_AVAILABLE: handle_waitlist_available,
     TOPIC_NEWSLETTER_SUBSCRIBED: handle_newsletter_subscribed,
+    TOPIC_NEWSLETTER_SEND: handle_newsletter_send,
+    TOPIC_BOOKING_ABANDONED: handle_booking_abandoned,
     TOPIC_REFUND_COMPLETED: handle_refund_completed,
 }
 
@@ -226,6 +243,7 @@ class Worker:
         self._stopping = asyncio.Event()
         self._last_reminder_sweep = 0.0
         self._last_waitlist_sweep = 0.0
+        self._last_abandoned_sweep = 0.0
 
     def request_stop(self) -> None:
         """Finish the message in hand, then exit."""
@@ -359,6 +377,16 @@ class Worker:
             queued = await notifications.enqueue_due_reminders(datetime.now(UTC))
             if queued:
                 logger.info("reminders_queued", count=queued)
+
+        # 4b. A reminder for people who left a booking unpaid, on the same slow clock.
+        if settings.email_configured and (
+            time.monotonic() - self._last_abandoned_sweep
+            >= settings.reminder_sweep_interval_seconds
+        ):
+            self._last_abandoned_sweep = time.monotonic()
+            asked = await AbandonedBookingService(session, outbox).queue_due(datetime.now(UTC))
+            if asked:
+                logger.info("abandoned_reminders_queued", count=asked)
 
         # 5. Waitlists: tickets that have come back since the last look.
         if time.monotonic() - self._last_waitlist_sweep >= settings.waitlist_sweep_interval_seconds:

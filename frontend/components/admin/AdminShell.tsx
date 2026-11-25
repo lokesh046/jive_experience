@@ -8,6 +8,7 @@ const NAV = [
   { href: "/admin", label: "Events", match: (p: string) => p === "/admin" || p.startsWith("/admin/events") },
   { href: "/admin/sales", label: "Sales", match: (p: string) => p.startsWith("/admin/sales") },
   { href: "/admin/bookings", label: "Bookings", match: (p: string) => p.startsWith("/admin/bookings") },
+  { href: "/admin/newsletters", label: "Newsletters", match: (p: string) => p.startsWith("/admin/newsletters") },
   { href: "/admin/inbox", label: "Inbox", match: (p: string) => p.startsWith("/admin/inbox") },
   { href: "/admin/artists", label: "Artists", match: (p: string) => p.startsWith("/admin/artists") },
   { href: "/admin/archive", label: "Archive", match: (p: string) => p.startsWith("/admin/archive") },
