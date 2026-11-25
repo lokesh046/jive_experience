@@ -9,6 +9,7 @@ by class name once every model is registered.
 
 from __future__ import annotations
 
+from app.models.archive_item import ArchiveItem  # noqa: F401
 from app.models.artist import Artist  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.base import Base

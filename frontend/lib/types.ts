@@ -353,3 +353,4 @@ export interface Promo {
 }
 
 export interface ArtistAdmin { id: string; name: string; note: string | null; photo_url: string | null; show_on_home: boolean; sort_order: number }
+export interface ArchiveAdmin { id: string; caption: string | null; photo_url: string; show_on_home: boolean; sort_order: number }

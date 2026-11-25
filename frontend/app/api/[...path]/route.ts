@@ -142,7 +142,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
 
   // An admin changed events, venues or ticket types: drop the cached public pages now,
   // so the change shows up straight away instead of after the cache lifetime.
-  if (upstream.ok && hasBody && joined.startsWith("admin/") && /^admin\/(events|venues|ticket-categories|settings|artists)/.test(joined)) {
+  if (upstream.ok && hasBody && joined.startsWith("admin/") && /^admin\/(events|venues|ticket-categories|settings|artists|archive)/.test(joined)) {
     revalidateTag("events", { expire: 0 });
   }
   const buf = upstream.status === 204 ? null : await upstream.arrayBuffer();

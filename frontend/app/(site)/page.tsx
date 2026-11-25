@@ -9,7 +9,7 @@ import { EventCard } from "@/components/EventCard";
 import { Photo } from "@/components/Photo";
 import { Ticker } from "@/components/Ticker";
 import { ARCHIVE, ARTISTS, PRIVATE_SERVICES } from "@/lib/content";
-import { getArtists, getEvents, getHomeArtists } from "@/lib/catalogue";
+import { getArtists, getEvents, getHomeArchive, getHomeArtists } from "@/lib/catalogue";
 import { SITE_NAME, SITE_URL } from "@/lib/config";
 import { inr, longDate } from "@/lib/format";
 
@@ -22,6 +22,7 @@ export const metadata: Metadata = {
 async function HomeContent() {
   const events = await getEvents();
   // The artists an admin picked; else performers from event lineups; else placeholders so the section is never bare.
+  const archive = await getHomeArchive();
   const chosen = await getHomeArtists();
   const real = chosen.length ? chosen : await getArtists(events);
   const artists = real.length ? real : ARTISTS.map((a) => ({ name: a.name, note: a.note, img: a.img, slug: "" }));
@@ -94,7 +95,7 @@ async function HomeContent() {
       <section className="block">
         <div className="wrap">
           <h2>From the archive</h2>
-          <ArchiveMorph photos={ARCHIVE} />
+          <ArchiveMorph photos={archive.length ? archive : ARCHIVE} />
         </div>
       </section>
 

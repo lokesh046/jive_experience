@@ -68,10 +68,10 @@ export function ArchiveMorph({ photos }: { photos: ReadonlyArray<{ img: string; 
   return (
     <div className="arch archive-morph" ref={archive}>
       <div className="archive-morph__ring" aria-hidden="true" />
-      {photos.map((photo) => (
-        <figure key={photo.caption}>
+      {photos.map((photo, i) => (
+        <figure key={`${i}-${photo.img}`}>
           <div className="ph"><Photo src={photo.img} alt="" sizes="(max-width: 820px) 66vw, 304px" /></div>
-          <figcaption><p>{photo.caption}</p></figcaption>
+          {photo.caption && <figcaption><p>{photo.caption}</p></figcaption>}
         </figure>
       ))}
     </div>

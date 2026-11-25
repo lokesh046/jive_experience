@@ -10,6 +10,7 @@ const NAV = [
   { href: "/admin/bookings", label: "Bookings", match: (p: string) => p.startsWith("/admin/bookings") },
   { href: "/admin/inbox", label: "Inbox", match: (p: string) => p.startsWith("/admin/inbox") },
   { href: "/admin/artists", label: "Artists", match: (p: string) => p.startsWith("/admin/artists") },
+  { href: "/admin/archive", label: "Archive", match: (p: string) => p.startsWith("/admin/archive") },
   { href: "/admin/promos", label: "Promo codes", match: (p: string) => p.startsWith("/admin/promos") },
   { href: "/admin/venues", label: "Venues", match: (p: string) => p.startsWith("/admin/venues") },
   { href: "/admin/settings", label: "Settings", match: (p: string) => p.startsWith("/admin/settings") },
