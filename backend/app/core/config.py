@@ -121,6 +121,11 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     mail_from: str | None = None
     mail_from_name: str = "JIVE Events"
+    # Browser push (Web Push, VAPID). Unset means push is switched off. Make a key pair once with
+    # `python -m scripts.make_vapid_keys`; the subject is a contact the push services may use.
+    vapid_public_key: str | None = None
+    vapid_private_key: SecretStr | None = None
+    vapid_subject: str = "mailto:push@jive.invalid"
     # Where new private-booking enquiries are announced. Defaults to the sending address.
     enquiry_notify_email: str | None = None
     # Where customers open their booking from an email.
@@ -231,6 +236,10 @@ class Settings(BaseSettings):
     @property
     def email_configured(self) -> bool:
         return bool(self.smtp_host and self.smtp_username and self.smtp_password and self.mail_from)
+
+    @property
+    def push_configured(self) -> bool:
+        return bool(self.vapid_public_key and self.vapid_private_key)
 
     @computed_field(repr=False)  # type: ignore[prop-decorator]
     @property

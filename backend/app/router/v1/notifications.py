@@ -6,10 +6,10 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, Query, status
 
 from app.core.errors import BusinessRuleError
-from app.dependencies import CurrentUser, NotificationCenterDep
+from app.dependencies import AppSettings, CurrentUser, NotificationCenterDep, PushServiceDep
 from app.models.notification import Notification
 from app.schemas.notification import (
     FeedOut,
@@ -17,6 +17,11 @@ from app.schemas.notification import (
     NotificationOut,
     PreferenceOut,
     PreferencesIn,
+    PushDevicesOut,
+    PushKeyOut,
+    PushSubscribeIn,
+    PushTestOut,
+    PushUnsubscribeIn,
     UnreadOut,
 )
 
@@ -89,3 +94,47 @@ async def put_preferences(
     payload: PreferencesIn, user: CurrentUser, service: NotificationCenterDep
 ) -> list[PreferenceOut]:
     return await service.set_preferences(user, payload)
+
+
+# ----------------------------------------------------------------- browser push ---
+
+
+@router.get("/push/key", response_model=PushKeyOut, summary="The key a browser needs to subscribe")
+async def push_key(settings: AppSettings) -> PushKeyOut:
+    """Public by design: it only lets a browser address messages to this site."""
+    return PushKeyOut(configured=settings.push_configured, public_key=settings.vapid_public_key)
+
+
+@router.post(
+    "/push/subscribe",
+    response_model=PushDevicesOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Turn push on for this browser",
+)
+async def push_subscribe(
+    payload: PushSubscribeIn,
+    user: CurrentUser,
+    service: PushServiceDep,
+    user_agent: Annotated[str | None, Header()] = None,
+) -> PushDevicesOut:
+    count = await service.subscribe(
+        user,
+        endpoint=payload.endpoint,
+        p256dh=payload.keys.p256dh,
+        auth=payload.keys.auth,
+        user_agent=user_agent,
+    )
+    return PushDevicesOut(devices=count)
+
+
+@router.post("/push/unsubscribe", response_model=PushDevicesOut, summary="Turn push off here")
+async def push_unsubscribe(
+    payload: PushUnsubscribeIn, user: CurrentUser, service: PushServiceDep
+) -> PushDevicesOut:
+    await service.unsubscribe(user, endpoint=payload.endpoint)
+    return PushDevicesOut(devices=await service.device_count(user))
+
+
+@router.post("/push/test", response_model=PushTestOut, summary="Send myself a test push")
+async def push_test(user: CurrentUser, service: PushServiceDep) -> PushTestOut:
+    return PushTestOut(sent=await service.send_test(user))

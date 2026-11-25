@@ -42,6 +42,7 @@ TOPIC_WAITLIST_AVAILABLE = "waitlist.available"
 TOPIC_NEWSLETTER_SEND = "newsletter.send"
 TOPIC_BOOKING_ABANDONED = "booking.abandoned"
 TOPIC_NOTIFICATION_EMAIL = "notification.email"
+TOPIC_NOTIFICATION_PUSH = "notification.push"
 
 BASE_RETRY_SECONDS = 30
 MAX_RETRY_SECONDS = 3600

@@ -66,4 +66,6 @@ class NotificationPreference(Base):
     channel: Mapped[str] = mapped_column(String(10), primary_key=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
-    __table_args__ = (CheckConstraint("channel IN ('in_app', 'email')", name="channel_known"),)
+    __table_args__ = (
+        CheckConstraint("channel IN ('in_app', 'email', 'push')", name="channel_known"),
+    )

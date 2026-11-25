@@ -24,6 +24,8 @@ class Category:
     email_choice: bool = False
     # True: this system sends an alert email for the group (administrators and gate staff).
     alert_email: bool = False
+    # Once a device is turned on, is this group pushed to it unless the person switches it off?
+    push_default: bool = True
 
 
 CATEGORIES: tuple[Category, ...] = (
@@ -65,6 +67,7 @@ CATEGORIES: tuple[Category, ...] = (
         (UserRole.ADMIN,),
         email_choice=True,
         alert_email=True,
+        push_default=False,
     ),
     Category(
         "enquiries",
@@ -73,6 +76,7 @@ CATEGORIES: tuple[Category, ...] = (
         (UserRole.ADMIN,),
         email_choice=True,
         alert_email=True,
+        push_default=False,
     ),
     Category(
         "system",
@@ -94,7 +98,7 @@ CATEGORIES: tuple[Category, ...] = (
 )
 
 BY_KEY: dict[str, Category] = {c.key: c for c in CATEGORIES}
-CHANNELS = ("in_app", "email")
+CHANNELS = ("in_app", "email", "push")
 
 
 def categories_for(role: UserRole) -> list[Category]:

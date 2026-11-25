@@ -45,6 +45,7 @@ from app.services.outbox import OutboxService
 from app.services.payment import PaymentService
 from app.services.payment_provider import PaymentProvider, get_payment_provider
 from app.services.promo import PromoService
+from app.services.push import PushService
 from app.services.refund import RefundService
 from app.services.reports import ReportService
 from app.services.settings import SettingsService
@@ -171,6 +172,10 @@ def get_notification_center(
     return NotificationCenter(session, outbox)
 
 
+def get_push_service(session: DbSession, settings: AppSettings) -> PushService:
+    return PushService(session, settings)
+
+
 def get_archive_service(session: DbSession) -> ArchiveService:
     return ArchiveService(session)
 
@@ -253,6 +258,7 @@ ArtistServiceDep = Annotated[ArtistService, Depends(get_artist_service)]
 ArchiveServiceDep = Annotated[ArchiveService, Depends(get_archive_service)]
 NewsletterServiceDep = Annotated[NewsletterService, Depends(get_newsletter_service)]
 NotificationCenterDep = Annotated[NotificationCenter, Depends(get_notification_center)]
+PushServiceDep = Annotated[PushService, Depends(get_push_service)]
 SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]
 
 

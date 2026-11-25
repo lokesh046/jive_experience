@@ -60,6 +60,7 @@ from app.services.outbox import (
     TOPIC_NEWSLETTER_SEND,
     TOPIC_NEWSLETTER_SUBSCRIBED,
     TOPIC_NOTIFICATION_EMAIL,
+    TOPIC_NOTIFICATION_PUSH,
     TOPIC_PAYMENT_CAPTURED,
     TOPIC_REFUND_COMPLETED,
     TOPIC_REFUND_PROCESS,
@@ -70,6 +71,7 @@ from app.services.outbox import (
 )
 from app.services.payment import PaymentService
 from app.services.payment_provider import get_payment_provider
+from app.services.push import PushService
 from app.services.refund import RefundService
 from app.services.ticket import TicketService
 from app.services.waitlist import WaitlistService
@@ -207,6 +209,13 @@ async def handle_notification_email(session: AsyncSession, payload: dict[str, An
     logger.info("alert_email_handled", notification_id=payload["notification_id"], sent=sent)
 
 
+async def handle_notification_push(session: AsyncSession, payload: dict[str, Any]) -> None:
+    sent = await PushService(session, get_settings()).deliver_notification(
+        uuid.UUID(payload["notification_id"])
+    )
+    logger.info("push_handled", notification_id=payload["notification_id"], devices=sent)
+
+
 async def handle_waitlist_available(session: AsyncSession, payload: dict[str, Any]) -> None:
     sent = await _notifications(session).send_waitlist_available(uuid.UUID(payload["entry_id"]))
     logger.info("waitlist_email_handled", entry_id=payload["entry_id"], sent=sent)
@@ -250,6 +259,7 @@ HANDLERS: dict[str, Handler] = {
     TOPIC_NEWSLETTER_SEND: handle_newsletter_send,
     TOPIC_BOOKING_ABANDONED: handle_booking_abandoned,
     TOPIC_NOTIFICATION_EMAIL: handle_notification_email,
+    TOPIC_NOTIFICATION_PUSH: handle_notification_push,
     TOPIC_REFUND_COMPLETED: handle_refund_completed,
 }
 
@@ -340,7 +350,10 @@ class Worker:
             await session.rollback()
             if attempts >= max_attempts:
                 await repository.mark_failed(message_id, error=str(exc))
-                if topic != TOPIC_NOTIFICATION_EMAIL:  # an alert about an alert would loop
+                if topic not in (
+                    TOPIC_NOTIFICATION_EMAIL,
+                    TOPIC_NOTIFICATION_PUSH,
+                ):  # no alerts about alerts
                     await Notifier(session).gave_up(topic, str(exc), message_id)
                 await session.commit()
                 log.error("outbox_message_failed_permanently", error=str(exc))

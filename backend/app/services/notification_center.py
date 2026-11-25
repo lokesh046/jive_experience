@@ -25,8 +25,9 @@ from app.models.fulfilment import StaffEventAssignment
 from app.models.notification import Notification
 from app.models.user import User
 from app.repositories.notification import NotificationRepository, PreferenceRepository
+from app.repositories.push import PushRepository
 from app.schemas.notification import PreferenceOut, PreferencesIn
-from app.services.outbox import TOPIC_NOTIFICATION_EMAIL, OutboxService
+from app.services.outbox import TOPIC_NOTIFICATION_EMAIL, TOPIC_NOTIFICATION_PUSH, OutboxService
 
 logger = structlog.get_logger(__name__)
 
@@ -71,7 +72,11 @@ class NotificationCenter:
         prefs = await self.preferences.for_users(people)
 
         def wants(user_id: uuid.UUID, channel: str) -> bool:
-            default = spec.in_app_default if channel == "in_app" else spec.email_default
+            default = {
+                "in_app": spec.in_app_default,
+                "email": spec.email_default,
+                "push": spec.push_default,
+            }[channel]
             return prefs.get((user_id, category, channel), default)
 
         rows = [
@@ -90,6 +95,19 @@ class NotificationCenter:
             if wants(user_id, "in_app")
         ]
         created = await self.notifications.add_many(rows)
+
+        if created:
+            # Push goes to people with a device turned on who have not switched this group off.
+            with_devices = await PushRepository(self.session).user_ids_with_devices(people)
+            pushed = {u for u in with_devices if wants(u, "push")}
+            if pushed:
+                for notification_id, user_id in (await self._owners(created)).items():
+                    if user_id in pushed:
+                        await self.outbox.enqueue(
+                            topic=TOPIC_NOTIFICATION_PUSH,
+                            payload={"notification_id": str(notification_id)},
+                            dedup_key=f"{TOPIC_NOTIFICATION_PUSH}:{notification_id}",
+                        )
 
         if spec.alert_email and created:
             emailed = {u for u in people if wants(u, "email")}
@@ -168,6 +186,7 @@ class NotificationCenter:
                     description=c.description,
                     in_app=stored.get((user.id, c.key, "in_app"), c.in_app_default),
                     email=stored.get((user.id, c.key, "email"), c.email_default),
+                    push=stored.get((user.id, c.key, "push"), c.push_default),
                     email_choice=c.email_choice,
                 )
             )
@@ -183,6 +202,8 @@ class NotificationCenter:
                 )
             if change.in_app is not None:
                 await self.preferences.put(user.id, spec.key, "in_app", change.in_app)
+            if change.push is not None:
+                await self.preferences.put(user.id, spec.key, "push", change.push)
             if change.email is not None:
                 if not spec.email_choice:
                     raise BusinessRuleError(

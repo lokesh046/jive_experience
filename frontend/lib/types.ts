@@ -364,4 +364,4 @@ export interface AppNotification {
   title: string; body: string | null; link: string | null; read: boolean; created_at: string;
 }
 export interface NotificationFeed { items: AppNotification[]; unread: number; next_before: string | null }
-export interface NotificationPreference { category: string; label: string; description: string; in_app: boolean; email: boolean; email_choice: boolean }
+export interface NotificationPreference { category: string; label: string; description: string; in_app: boolean; email: boolean; push: boolean; email_choice: boolean }

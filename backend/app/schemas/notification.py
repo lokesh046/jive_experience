@@ -42,6 +42,7 @@ class PreferenceOut(BaseModel):
     description: str
     in_app: bool
     email: bool
+    push: bool
     # Whether the email switch does anything for this group.
     email_choice: bool
 
@@ -50,7 +51,37 @@ class PreferenceUpdate(BaseModel):
     category: str
     in_app: bool | None = None
     email: bool | None = None
+    push: bool | None = None
 
 
 class PreferencesIn(BaseModel):
     changes: Annotated[list[PreferenceUpdate], Field(min_length=1, max_length=20)]
+
+
+class PushKeyOut(BaseModel):
+    configured: bool
+    public_key: str | None = None
+
+
+class PushKeys(BaseModel):
+    p256dh: Annotated[str, Field(min_length=20, max_length=200)]
+    auth: Annotated[str, Field(min_length=8, max_length=100)]
+
+
+class PushSubscribeIn(BaseModel):
+    """What a browser's `PushSubscription.toJSON()` gives."""
+
+    endpoint: Annotated[str, Field(min_length=20, max_length=1024, pattern=r"^https://")]
+    keys: PushKeys
+
+
+class PushUnsubscribeIn(BaseModel):
+    endpoint: Annotated[str, Field(min_length=20, max_length=1024)]
+
+
+class PushDevicesOut(BaseModel):
+    devices: int
+
+
+class PushTestOut(BaseModel):
+    sent: int
