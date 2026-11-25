@@ -37,11 +37,20 @@ class ScheduleOut(BaseModel):
     overdue: bool
 
 
+class EmailBudgetOut(BaseModel):
+    enforced: bool
+    limit: int
+    bulk_cap: int
+    used_24h: int
+    per_second: float
+
+
 class OverviewOut(BaseModel):
     worker_alive: bool
     worker_ever_seen: bool
     workers: list[WorkerOut]
     queue: QueueOut
+    email: EmailBudgetOut
     schedules: list[ScheduleOut]
 
 
@@ -52,6 +61,7 @@ class JobOut(BaseModel):
     status: str
     attempts: int
     max_attempts: int
+    priority: int = 1
     last_error: str | None = None
     created_at: datetime
     available_at: datetime

@@ -217,7 +217,8 @@ class NotificationService:
             html=html,
             images=images,
         )
-        await mailer.send_mail(self.settings, mail)
+        # A reminder can wait; the tickets themselves cannot.
+        await mailer.send_mail(self.settings, mail, bulk=reminder)
         logger.info("tickets_email_sent", booking_id=str(booking.id), tickets=len(rows))
         return True
 
@@ -411,7 +412,7 @@ class NotificationService:
             to=subscriber.email,
             unsubscribe_url=f"{base}/unsubscribe?token={subscriber.unsubscribe_token}",
         )
-        await mailer.send_mail(self.settings, mail)
+        await mailer.send_mail(self.settings, mail, bulk=True)
         await self.campaigns.count_delivered(campaign.id)
         return True
 
@@ -489,7 +490,7 @@ class NotificationService:
                 "booking on our site.</p></div>"
             ),
         )
-        await mailer.send_mail(self.settings, mail)
+        await mailer.send_mail(self.settings, mail, bulk=True)
         logger.info("abandoned_email_sent", booking_id=str(booking.id))
         return True
 

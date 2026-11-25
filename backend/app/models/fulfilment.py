@@ -18,6 +18,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -203,6 +204,10 @@ class OutboxMessage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
+    # 0 urgent (money, tickets), 1 normal, 2 reminders, 3 bulk. Lower runs first.
+    priority: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=1, server_default="1"
+    )
 
     available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -222,6 +227,7 @@ class OutboxMessage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         # The worker's claim query: due, runnable work, oldest first.
         Index(
             "ix_outbox_messages_claimable",
+            "priority",
             "available_at",
             postgresql_where="status IN ('PENDING', 'PROCESSING')",
         ),

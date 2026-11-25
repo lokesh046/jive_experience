@@ -116,7 +116,7 @@ async def test_reminder_email_has_the_tickets_and_skips_a_cancelled_booking(
     to, reference, title, booking_id = customer.email, booking.reference, event.title, booking.id
     sent: list[Mail] = []
 
-    async def fake_send(_settings: Settings, mail: Mail) -> None:
+    async def fake_send(_settings: Settings, mail: Mail, **_: object) -> None:
         sent.append(mail)
 
     monkeypatch.setattr("app.core.mailer.send_mail", fake_send)

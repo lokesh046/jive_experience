@@ -8,6 +8,7 @@ type Tab = "FAILED" | "PENDING" | "PROCESSING" | "DONE";
 const TABS: { key: Tab; label: string }[] = [
   { key: "FAILED", label: "Failed" }, { key: "PENDING", label: "Waiting" }, { key: "PROCESSING", label: "Running" }, { key: "DONE", label: "Done" },
 ];
+const LANE = ["Urgent", "Normal", "Reminder", "Bulk"];
 const every = (s: number) => (s < 90 ? `${s} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`);
 
 export default function Jobs() {
@@ -57,7 +58,7 @@ export default function Jobs() {
       <p className="hint">Everything the site does behind the scenes: issuing and emailing tickets, sending refunds, reminders and notifications. This page refreshes itself.</p>
       {msg && <p className={msg.ok ? "ok" : "err"} role={msg.ok ? "status" : "alert"} style={msg.ok ? { marginLeft: 0 } : undefined}>{msg.text}</p>}
 
-      <div className="jb-cards">
+      <div className="jb-cards five">
         <div className={`jb-card ${o && o.worker_ever_seen && !o.worker_alive ? "bad" : ""}`}>
           <span className="small">Worker</span>
           <strong className={o?.worker_alive ? "good" : ""}>{state}</strong>
@@ -65,6 +66,11 @@ export default function Jobs() {
         </div>
         <div className="jb-card"><span className="small">Waiting</span><strong>{q?.waiting ?? "…"}</strong><span className="small">{q ? (q.ready === 0 ? "Nothing ready to run" : `${q.ready} ready now${q.oldest_ready_seconds > 60 ? `, oldest ${Math.round(q.oldest_ready_seconds / 60)} min` : ""}`) : ""}</span></div>
         <div className="jb-card"><span className="small">Running now</span><strong>{q?.running ?? "…"}</strong><span className="small">{q ? `${q.done_24h} done in 24 h` : ""}</span></div>
+        <div className={`jb-card ${o?.email.enforced && o.email.used_24h >= o.email.limit * 0.9 ? "warn" : ""}`}>
+          <span className="small">Email, last 24 hours</span>
+          <strong>{o ? (o.email.enforced ? `${o.email.used_24h} / ${o.email.limit}` : "No limit") : "…"}</strong>
+          <span className="small">{o ? (o.email.enforced ? `Newsletters and reminders may use ${o.email.bulk_cap}; the rest is kept for tickets and refunds.` : "Set EMAIL_DAILY_LIMIT to stay inside your mail account's allowance.") : ""}</span>
+        </div>
         <div className={`jb-card ${q && q.failed > 0 ? "warn" : ""}`}><span className="small">Failed</span><strong>{q?.failed ?? "…"}</strong><span className="small">{q ? (q.failed ? "Gave up after several tries" : "Nothing is stuck") : ""}</span></div>
       </div>
 
@@ -85,7 +91,7 @@ export default function Jobs() {
           {rows.items.map((j) => (
             <div key={j.id}>
               <div className="tr" style={{ gridTemplateColumns: "2fr 0.8fr 1fr auto" }}>
-                <span><span className="name">{j.label}</span>{j.label !== j.topic && <><br /><span className="small">{j.topic}</span></>}{j.last_error && <><br /><span className="small jb-err">{j.last_error.slice(0, 110)}{j.last_error.length > 110 ? "…" : ""}</span></>}</span>
+                <span><span className="name">{j.label}</span>{j.priority !== 1 && <span className="tag">{LANE[j.priority] ?? "Normal"}</span>}{j.label !== j.topic && <><br /><span className="small">{j.topic}</span></>}{j.last_error && <><br /><span className="small jb-err">{j.last_error.slice(0, 110)}{j.last_error.length > 110 ? "…" : ""}</span></>}</span>
                 <span>{j.attempts} of {j.max_attempts}</span>
                 <span className="small">{j.status === "DONE" && j.completed_at ? `Done ${ago(j.completed_at)}` : j.status === "PENDING" && new Date(j.available_at) > new Date() ? `Runs ${new Date(j.available_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}` : `Queued ${ago(j.created_at)}`}</span>
                 <span style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>

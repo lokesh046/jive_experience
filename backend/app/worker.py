@@ -29,6 +29,7 @@ import socket
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -36,6 +37,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.core.email_budget import EmailDeferred
 from app.core.job_labels import SCHEDULES
 from app.core.logging import configure_logging
 from app.core.redis import close_redis, create_redis, get_redis
@@ -53,6 +55,7 @@ from app.services.notification import NotificationService
 from app.services.notification_center import NotificationCenter
 from app.services.notify_events import Notifier
 from app.services.outbox import (
+    BACKGROUND_FROM,
     TOPIC_BOOKING_ABANDONED,
     TOPIC_BOOKING_CANCELLED,
     TOPIC_BOOKING_CONFIRMED,
@@ -84,6 +87,22 @@ STALE_LOCK_MINUTES = 15
 HEARTBEAT_SECONDS = 15.0
 
 Handler = Callable[[AsyncSession, dict[str, Any]], Awaitable[None]]
+
+
+@dataclass(frozen=True, slots=True)
+class Job:
+    """A claimed message, copied out so it can be worked on in its own session."""
+
+    id: uuid.UUID
+    topic: str
+    payload: dict[str, Any]
+    attempts: int
+    max_attempts: int
+    priority: int
+
+    @classmethod
+    def of(cls, m: OutboxMessage) -> Job:
+        return cls(m.id, m.topic, m.payload, m.attempts, m.max_attempts, m.priority)
 
 
 # --------------------------------------------------------------- handlers ---
@@ -291,35 +310,77 @@ class Worker:
     # ---------------------------------------------------------- outbox ---
 
     async def run_outbox(self) -> None:
-        sessionmaker = get_sessionmaker()
+        """Work the queue, several jobs at once, urgent ones first.
+
+        Most jobs spend their time waiting on a network (an email takes about a second), so a
+        handful in flight at once multiplies how much one worker gets through. Each job has its
+        own database session, and a slot is refilled the moment one finishes: a ticket that
+        arrives mid-newsletter waits for a free slot, not for the whole batch.
+        """
+        slots = max(1, self.settings.worker_concurrency)
+        background_cap = max(0, min(self.settings.worker_background_slots, slots - 1))
+        running: dict[asyncio.Task[None], bool] = {}  # task -> is it background work?
         while not self._stopping.is_set():
-            processed = 0
-            try:
-                async with sessionmaker() as session:
-                    processed = await self._drain_batch(session)
-            except Exception:
-                logger.exception("outbox_loop_error")
-
-            # Back off only when idle; a full batch means more work is waiting.
-            if processed == 0:
+            free = slots - len(running)
+            claimed: list[Job] = []
+            if free > 0:
+                try:
+                    background_busy = sum(running.values())
+                    claimed = await self._claim(free, background_cap - background_busy)
+                except Exception:
+                    logger.exception("outbox_claim_error")
+            for job in claimed:
+                task = asyncio.create_task(self._process(job))
+                running[task] = job.priority >= BACKGROUND_FROM
+            if not running:
                 await self._sleep(self.settings.worker_poll_interval_seconds)
+                continue
+            # A full house waits for any job to finish; otherwise look again after a short pause.
+            done, _ = await asyncio.wait(
+                running,
+                timeout=None
+                if len(running) >= slots
+                else self.settings.worker_poll_interval_seconds,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in done:
+                running.pop(task, None)
+        if running:  # on the way out, let jobs in hand finish
+            await asyncio.wait(running)
 
-    async def _drain_batch(self, session: AsyncSession) -> int:
-        repository = OutboxRepository(session)
+    async def _claim(self, free: int, background_free: int) -> list[Job]:
+        """Take work: everything urgent or normal first, then background work in its own slots."""
+        sessionmaker = get_sessionmaker()
         now = datetime.now(UTC)
-        claimed = await repository.claim(
-            worker_id=self.worker_id, now=now, limit=self.settings.worker_batch_size
-        )
-        # The claim is committed immediately: if this process dies now the
-        # rows are marked PROCESSING and the stale-lock sweep recovers them,
-        # rather than being claimed again at once by a sibling.
-        await session.commit()
+        jobs: list[Job] = []
+        async with sessionmaker() as session:
+            repository = OutboxRepository(session)
+            front = await repository.claim(
+                worker_id=self.worker_id,
+                now=now,
+                limit=free,
+                max_priority=BACKGROUND_FROM - 1,
+            )
+            jobs += [Job.of(m) for m in front]
+            left = min(free - len(front), background_free)
+            if left > 0:
+                back = await repository.claim(
+                    worker_id=self.worker_id, now=now, limit=left, min_priority=BACKGROUND_FROM
+                )
+                jobs += [Job.of(m) for m in back]
+            # Committed at once: if this process dies now the rows read PROCESSING and the
+            # stale-lock sweep recovers them, rather than a sibling claiming them again.
+            await session.commit()
+        return jobs
 
-        for message in claimed:
-            await self._handle(session, message)
-        return len(claimed)
+    async def _process(self, job: Job) -> None:
+        try:
+            async with get_sessionmaker()() as session:
+                await self._handle(session, job)
+        except Exception:
+            logger.exception("outbox_job_error", topic=job.topic)
 
-    async def _handle(self, session: AsyncSession, message: OutboxMessage) -> None:
+    async def _handle(self, session: AsyncSession, message: Job | OutboxMessage) -> None:
         repository = OutboxRepository(session)
 
         # Copy everything needed before the handler runs. A rollback expires
@@ -346,6 +407,13 @@ class Worker:
 
         try:
             await handler(session, payload)
+        except EmailDeferred as wait:
+            # Not a failure: the day's email allowance is used up. Come back when there is room.
+            await session.rollback()
+            await repository.defer(message_id, until=wait.until, reason=wait.reason)
+            await session.commit()
+            log.info("outbox_message_deferred", until=wait.until.isoformat(), reason=wait.reason)
+            return
         except Exception as exc:
             await session.rollback()
             if attempts >= max_attempts:

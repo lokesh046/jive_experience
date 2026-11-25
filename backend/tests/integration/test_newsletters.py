@@ -246,7 +246,7 @@ async def test_the_worker_sends_each_copy_and_skips_anyone_who_left_since(
     )
     sent: list[Mail] = []
 
-    async def capture(_settings: Settings, mail: Mail) -> None:
+    async def capture(_settings: Settings, mail: Mail, **_: object) -> None:
         sent.append(mail)
 
     monkeypatch.setattr(mailer, "send_mail", capture)
@@ -274,7 +274,7 @@ async def test_a_test_send_goes_only_to_the_administrator(
     actor = await _admin_user(db_session)
     sent: list[Mail] = []
 
-    async def capture(_settings: Settings, mail: Mail) -> None:
+    async def capture(_settings: Settings, mail: Mail, **_: object) -> None:
         sent.append(mail)
 
     monkeypatch.setattr(mailer, "send_mail", capture)

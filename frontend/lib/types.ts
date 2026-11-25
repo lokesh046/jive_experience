@@ -370,9 +370,10 @@ export interface JobsOverview {
   worker_alive: boolean; worker_ever_seen: boolean;
   workers: { id: string; host: string; started_at: string; last_seen_at: string; seconds_since_seen: number }[];
   queue: { waiting: number; ready: number; running: number; failed: number; done_24h: number; oldest_ready_seconds: number };
+  email: { enforced: boolean; limit: number; bulk_cap: number; used_24h: number; per_second: number };
   schedules: { name: string; label: string; interval_seconds: number; last_finished_at: string | null; last_status: "OK" | "ERROR" | null; last_error: string | null; runs: number; overdue: boolean }[];
 }
 export interface JobRow {
-  id: string; topic: string; label: string; status: "PENDING" | "PROCESSING" | "DONE" | "FAILED"; attempts: number; max_attempts: number;
+  id: string; topic: string; label: string; status: "PENDING" | "PROCESSING" | "DONE" | "FAILED"; attempts: number; max_attempts: number; priority: number;
   last_error: string | null; created_at: string; available_at: string; completed_at: string | null; payload: Record<string, unknown>;
 }

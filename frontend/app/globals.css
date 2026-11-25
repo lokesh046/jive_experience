@@ -1091,3 +1091,6 @@ select option { background: #111; }
 .jb-err { color: #ff9a9d; overflow-wrap: anywhere; }
 .jb-detail { margin: 0 0 8px; padding: 14px 16px; border-radius: 12px; background: #0f0f0f; color: var(--mute); font: 12px/1.6 ui-monospace, Menlo, monospace; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 860px) { .jb-cards { grid-template-columns: 1fr 1fr; } }
+.jb-cards.five { grid-template-columns: repeat(5, 1fr); }
+@media (max-width: 1100px) { .jb-cards.five { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px) { .jb-cards.five { grid-template-columns: 1fr 1fr; } }

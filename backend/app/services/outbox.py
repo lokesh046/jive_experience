@@ -44,6 +44,36 @@ TOPIC_BOOKING_ABANDONED = "booking.abandoned"
 TOPIC_NOTIFICATION_EMAIL = "notification.email"
 TOPIC_NOTIFICATION_PUSH = "notification.push"
 
+# How soon each kind of job should run when the queue is busy. Lower runs first.
+URGENT, NORMAL, REMINDER, BULK = 0, 1, 2, 3
+# Jobs at this number or above are "background": they may use only some of the worker's slots.
+BACKGROUND_FROM = REMINDER
+TOPIC_PRIORITY: dict[str, int] = {
+    # Money and tickets: a person is waiting on these.
+    TOPIC_PAYMENT_CAPTURED: URGENT,
+    TOPIC_BOOKING_CONFIRMED: URGENT,
+    TOPIC_REFUND_PROCESS: URGENT,
+    TOPIC_EVENT_CANCELLED: URGENT,
+    # Everyday mail and alerts.
+    TOPIC_TICKETS_ISSUED: NORMAL,
+    TOPIC_BOOKING_CANCELLED: NORMAL,
+    TOPIC_REFUND_COMPLETED: NORMAL,
+    TOPIC_ENQUIRY_RECEIVED: NORMAL,
+    TOPIC_NEWSLETTER_SUBSCRIBED: NORMAL,
+    TOPIC_WAITLIST_AVAILABLE: NORMAL,
+    TOPIC_NOTIFICATION_EMAIL: NORMAL,
+    TOPIC_NOTIFICATION_PUSH: NORMAL,
+    # Can come in thousands at once, and must never delay the above.
+    TOPIC_BOOKING_REMINDER: REMINDER,
+    TOPIC_BOOKING_ABANDONED: BULK,
+    TOPIC_NEWSLETTER_SEND: BULK,
+}
+
+
+def priority_for(topic: str) -> int:
+    return TOPIC_PRIORITY.get(topic, NORMAL)
+
+
 BASE_RETRY_SECONDS = 30
 MAX_RETRY_SECONDS = 3600
 
@@ -86,6 +116,7 @@ class OutboxService:
             "status": OutboxStatus.PENDING,
             "available_at": available_at,
             "dedup_key": dedup_key,
+            "priority": priority_for(topic),
         }
 
         statement = insert(OutboxMessage).values(**values)

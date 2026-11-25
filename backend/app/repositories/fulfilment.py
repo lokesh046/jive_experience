@@ -180,7 +180,13 @@ class OutboxRepository(BaseRepository[OutboxMessage]):
     model = OutboxMessage
 
     async def claim(
-        self, *, worker_id: str, now: datetime, limit: int = 20
+        self,
+        *,
+        worker_id: str,
+        now: datetime,
+        limit: int = 20,
+        min_priority: int = 0,
+        max_priority: int | None = None,
     ) -> Sequence[OutboxMessage]:
         """Take a batch of due work.
 
@@ -194,8 +200,11 @@ class OutboxRepository(BaseRepository[OutboxMessage]):
                 OutboxMessage.status.in_((OutboxStatus.PENDING, OutboxStatus.PROCESSING)),
                 OutboxMessage.available_at <= now,
                 OutboxMessage.attempts < OutboxMessage.max_attempts,
+                OutboxMessage.priority >= min_priority,
+                *([OutboxMessage.priority <= max_priority] if max_priority is not None else []),
             )
-            .order_by(OutboxMessage.available_at)
+            # Urgent first, then the longest-waiting within each level.
+            .order_by(OutboxMessage.priority, OutboxMessage.available_at)
             .limit(limit)
             .with_for_update(skip_locked=True)
             .scalar_subquery()
@@ -241,6 +250,25 @@ class OutboxRepository(BaseRepository[OutboxMessage]):
                 locked_at=None,
                 locked_by=None,
                 last_error=error[:2000],
+            )
+        )
+
+    async def defer(self, message_id: uuid.UUID, *, until: datetime, reason: str) -> None:
+        """Put a job off until later *without* spending one of its attempts.
+
+        For "not now, and that is nobody's fault": the day's email allowance is used up, say.
+        The claim counted an attempt, so it is handed back.
+        """
+        await self.session.execute(
+            update(OutboxMessage)
+            .where(OutboxMessage.id == message_id)
+            .values(
+                status=OutboxStatus.PENDING,
+                available_at=until,
+                attempts=func.greatest(OutboxMessage.attempts - 1, 0),
+                locked_at=None,
+                locked_by=None,
+                last_error=reason[:2000],
             )
         )
 

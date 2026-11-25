@@ -1104,7 +1104,7 @@ async def test_ticket_email_carries_every_qr_to_the_customer(
     customer, booking, event = await _confirmed_booking_with_tickets(db_session, quantity=2)
     sent: list[Mail] = []
 
-    async def fake_send(_settings: Settings, mail: Mail) -> None:
+    async def fake_send(_settings: Settings, mail: Mail, **_: object) -> None:
         sent.append(mail)
 
     monkeypatch.setattr("app.core.mailer.send_mail", fake_send)
@@ -1176,7 +1176,7 @@ async def test_cancellation_and_refund_emails_reach_the_customer(
 
     sent: list[Mail] = []
 
-    async def fake_send(_settings: Settings, mail: Mail) -> None:
+    async def fake_send(_settings: Settings, mail: Mail, **_: object) -> None:
         sent.append(mail)
 
     monkeypatch.setattr("app.core.mailer.send_mail", fake_send)
@@ -1220,7 +1220,7 @@ async def test_vip_ticket_email_uses_the_premium_block(
     await db_session.commit()
     sent: list[Mail] = []
 
-    async def fake_send(_settings: Settings, mail: Mail) -> None:
+    async def fake_send(_settings: Settings, mail: Mail, **_: object) -> None:
         sent.append(mail)
 
     monkeypatch.setattr("app.core.mailer.send_mail", fake_send)

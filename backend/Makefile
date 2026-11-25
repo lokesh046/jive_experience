@@ -22,6 +22,11 @@ dev:  ## Run the API (PORT=8000 by default, override with PORT=8001)
 worker:  ## Run the background worker (outbox + sweeper)
 	$(PY) -m app.worker
 
+# More workers share the one queue safely: each takes jobs the others are not holding.
+N ?= 2
+workers:  ## Run several worker processes:  make workers N=3
+	@for i in $$(seq 1 $(N)); do $(PY) -m app.worker & done; wait
+
 token:  ## Print an access token for Swagger:  make token EMAIL=you@gmail.com
 	@$(PY) -m app.cli dev-token --email $(EMAIL)
 

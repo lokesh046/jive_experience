@@ -121,6 +121,14 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     mail_from: str | None = None
     mail_from_name: str = "JIVE Events"
+    # What the mail account may send. Gmail allows about 500 a day (about 2,000 on Google
+    # Workspace); a mail service such as SES allows far more. 0 means no limit is enforced here.
+    email_daily_limit: int = 0
+    # The share of that allowance that newsletters, reminders and similar bulk mail may use, so
+    # tickets and refunds always have room. 0.7 keeps the last 30% for them.
+    email_bulk_share: float = 0.7
+    # Emails per second across all workers, for providers that cap the rate. 0 means unpaced.
+    email_per_second: float = 0.0
     # Browser push (Web Push, VAPID). Unset means push is switched off. Make a key pair once with
     # `python -m scripts.make_vapid_keys`; the subject is a contact the push services may use.
     vapid_public_key: str | None = None
@@ -142,11 +150,18 @@ class Settings(BaseSettings):
     # --------------------------------------------------------- worker ----
     worker_poll_interval_seconds: float = 2.0
     worker_batch_size: int = 20
+    # Jobs one worker process runs at the same time. Most jobs wait on the network (an email
+    # takes about a second), so a handful at once multiplies throughput. More processes can be
+    # started too: they share the queue safely.
+    worker_concurrency: int = 8
+    # Of those, how many may be busy with background work (newsletters, reminders) at once.
+    # The rest stay free so a ticket or a refund never waits behind a bulk send.
+    worker_background_slots: int = 5
     worker_sweep_interval_seconds: float = 15.0
     # The API and the worker hold separate pools against the same database;
     # size them independently so a busy worker cannot starve the API.
-    worker_db_pool_size: int = 5
-    worker_db_max_overflow: int = 5
+    worker_db_pool_size: int = 12
+    worker_db_max_overflow: int = 8
 
     # --------------------------------------------------------- database ----
     postgres_host: str = "localhost"

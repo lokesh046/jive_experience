@@ -211,7 +211,7 @@ async def test_the_email_names_the_night_and_the_tickets_and_links_back(
     on = _on(settings)
     sent: list[Mail] = []
 
-    async def capture(_s: Settings, mail: Mail) -> None:
+    async def capture(_s: Settings, mail: Mail, **_: object) -> None:
         sent.append(mail)
 
     monkeypatch.setattr(mailer, "send_mail", capture)
@@ -236,7 +236,7 @@ async def test_nothing_is_sent_when_it_would_no_longer_help(
     on = _on(settings)
     sent: list[Mail] = []
 
-    async def capture(_s: Settings, mail: Mail) -> None:
+    async def capture(_s: Settings, mail: Mail, **_: object) -> None:
         sent.append(mail)
 
     monkeypatch.setattr(mailer, "send_mail", capture)

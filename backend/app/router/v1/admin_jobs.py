@@ -8,11 +8,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
+from app.core.email_budget import EmailBudget
 from app.core.errors import NotFoundError
 from app.core.job_labels import job_label
-from app.dependencies import AdminJobsDep, RequireAdmin
+from app.core.redis import get_redis
+from app.dependencies import AdminJobsDep, AppSettings, RequireAdmin
 from app.models.fulfilment import OutboxMessage, OutboxStatus
 from app.schemas.jobs import (
+    EmailBudgetOut,
     JobOut,
     JobPage,
     OverviewOut,
@@ -33,6 +36,7 @@ def _job(m: OutboxMessage) -> JobOut:
         status=m.status.value,
         attempts=m.attempts,
         max_attempts=m.max_attempts,
+        priority=m.priority,
         last_error=m.last_error,
         created_at=m.created_at,
         available_at=m.available_at,
@@ -42,8 +46,20 @@ def _job(m: OutboxMessage) -> JobOut:
 
 
 @router.get("/jobs/overview", response_model=OverviewOut, summary="Worker, queue and schedules")
-async def overview(actor: RequireAdmin, service: AdminJobsDep) -> OverviewOut:
+async def overview(
+    actor: RequireAdmin, service: AdminJobsDep, settings: AppSettings
+) -> OverviewOut:
     now = datetime.now(UTC)
+    budget = EmailBudget(
+        get_redis(),
+        daily_limit=settings.email_daily_limit,
+        bulk_share=settings.email_bulk_share,
+        per_second=settings.email_per_second,
+    )
+    try:
+        used = await budget.used() if settings.email_daily_limit > 0 else 0
+    except Exception:
+        used = 0
     snap = await service.health.snapshot(now)
     q = snap.queue
     return OverviewOut(
@@ -66,6 +82,13 @@ async def overview(actor: RequireAdmin, service: AdminJobsDep) -> OverviewOut:
             failed=q.get("FAILED", 0),
             done_24h=q.get("DONE", 0),
             oldest_ready_seconds=q.get("oldest_ready_seconds", 0),
+        ),
+        email=EmailBudgetOut(
+            enforced=settings.email_daily_limit > 0,
+            limit=settings.email_daily_limit,
+            bulk_cap=budget.cap(bulk=True),
+            used_24h=used,
+            per_second=settings.email_per_second,
         ),
         schedules=[
             ScheduleOut(

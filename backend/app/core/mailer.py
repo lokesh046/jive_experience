@@ -13,8 +13,14 @@ from dataclasses import dataclass, field
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 
+import structlog
+
 from app.core.config import Settings
+from app.core.email_budget import EmailBudget, EmailDeferred
 from app.core.errors import ServiceUnavailableError
+from app.core.redis import get_redis
+
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -63,18 +69,49 @@ def _send_blocking(settings: Settings, message: EmailMessage) -> None:
         server.send_message(message)
 
 
-async def send_mail(settings: Settings, mail: Mail) -> None:
-    """Send one message. Raises on failure so the outbox retries it."""
+async def send_mail(settings: Settings, mail: Mail, *, bulk: bool = False) -> None:
+    """Send one message. Raises on failure so the outbox retries it.
+
+    `bulk` marks mail that can wait (newsletters, reminders): it may use only part of the daily
+    allowance, so tickets and refunds always have room. When the allowance is used up this
+    raises `EmailDeferred`, which the worker turns into "try again later" without a failure.
+    """
     if mail.to.lower().endswith(".invalid"):
         # A counter sale with no email address belongs to a throwaway account; nothing to send.
         return
+    budget = _budget(settings)
+    receipt: str | None = None
+    if budget is not None:
+        try:
+            receipt = await budget.acquire(bulk=bulk)
+        except EmailDeferred:
+            raise
+        except Exception:  # Redis down: do not block mail over the counter
+            logger.warning("email_budget_unavailable")
+            budget = None
     message = build_message(settings, mail)
     try:
         await asyncio.to_thread(_send_blocking, settings, message)
     except (smtplib.SMTPException, OSError) as exc:
+        if budget is not None:
+            await budget.release(receipt)
         raise ServiceUnavailableError(
             "The email could not be sent.", code="EMAIL_SEND_FAILED"
         ) from exc
+
+
+def _budget(settings: Settings) -> EmailBudget | None:
+    if settings.email_daily_limit <= 0 and settings.email_per_second <= 0:
+        return None
+    try:
+        return EmailBudget(
+            get_redis(),
+            daily_limit=settings.email_daily_limit,
+            bulk_share=settings.email_bulk_share,
+            per_second=settings.email_per_second,
+        )
+    except Exception:
+        return None
 
 
 def login_code_mail(*, to: str, code: str, minutes: int) -> Mail:

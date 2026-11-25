@@ -366,7 +366,7 @@ async def test_the_alert_email_carries_the_link_and_a_customer_can_opt_out_of_re
 ) -> None:
     sent: list[Mail] = []
 
-    async def capture(_s: Settings, mail: Mail) -> None:
+    async def capture(_s: Settings, mail: Mail, **_: object) -> None:
         sent.append(mail)
 
     monkeypatch.setattr(mailer, "send_mail", capture)
