@@ -241,7 +241,7 @@ async def test_only_people_with_a_device_and_the_group_on_get_a_push(
                 sa.text(
                     "SELECT n.user_id FROM outbox_messages o JOIN notifications n "
                     "ON n.id = (o.payload->>'notification_id')::uuid "
-                    "WHERE o.topic = 'notification.push'"
+                    "WHERE o.topic = 'notification.push' AND n.dedup_key = 'p1'"
                 )
             )
         ).all()

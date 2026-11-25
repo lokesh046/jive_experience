@@ -365,3 +365,14 @@ export interface AppNotification {
 }
 export interface NotificationFeed { items: AppNotification[]; unread: number; next_before: string | null }
 export interface NotificationPreference { category: string; label: string; description: string; in_app: boolean; email: boolean; push: boolean; email_choice: boolean }
+
+export interface JobsOverview {
+  worker_alive: boolean; worker_ever_seen: boolean;
+  workers: { id: string; host: string; started_at: string; last_seen_at: string; seconds_since_seen: number }[];
+  queue: { waiting: number; ready: number; running: number; failed: number; done_24h: number; oldest_ready_seconds: number };
+  schedules: { name: string; label: string; interval_seconds: number; last_finished_at: string | null; last_status: "OK" | "ERROR" | null; last_error: string | null; runs: number; overdue: boolean }[];
+}
+export interface JobRow {
+  id: string; topic: string; label: string; status: "PENDING" | "PROCESSING" | "DONE" | "FAILED"; attempts: number; max_attempts: number;
+  last_error: string | null; created_at: string; available_at: string; completed_at: string | null; payload: Record<string, unknown>;
+}

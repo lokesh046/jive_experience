@@ -36,12 +36,14 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.core.job_labels import SCHEDULES
 from app.core.logging import configure_logging
 from app.core.redis import close_redis, create_redis, get_redis
 from app.db.session import create_engine, dispose_engine, get_sessionmaker
 from app.models.commerce import Booking, RefundStatus
 from app.models.fulfilment import OutboxMessage
 from app.repositories.fulfilment import OutboxRepository
+from app.repositories.ops import OpsRepository
 from app.services.abandoned import AbandonedBookingService
 from app.services.booking import BookingService
 from app.services.cache import CatalogueCache
@@ -79,6 +81,7 @@ from app.services.waitlist import WaitlistService
 logger = structlog.get_logger("worker")
 
 STALE_LOCK_MINUTES = 15
+HEARTBEAT_SECONDS = 15.0
 
 Handler = Callable[[AsyncSession, dict[str, Any]], Awaitable[None]]
 
@@ -272,11 +275,8 @@ class Worker:
         self.settings = settings
         self.worker_id = f"{socket.gethostname()}:{uuid.uuid4().hex[:8]}"
         self._stopping = asyncio.Event()
-        self._last_reminder_sweep = 0.0
-        self._last_waitlist_sweep = 0.0
-        self._last_abandoned_sweep = 0.0
-        self._last_prune = 0.0
-        self._last_doors_sweep = 0.0
+        self._last_run: dict[str, float] = {}
+        self._last_recorded: dict[str, float] = {}
 
     def request_stop(self) -> None:
         """Finish the message in hand, then exit."""
@@ -380,79 +380,149 @@ class Worker:
                 logger.exception("sweeper_loop_error")
             await self._sleep(self.settings.worker_sweep_interval_seconds)
 
+    async def _step(
+        self,
+        session: AsyncSession,
+        name: str,
+        interval: float,
+        job: Callable[[], Awaitable[object]],
+        *,
+        enabled: bool = True,
+    ) -> None:
+        """Run one recurring job if it is due, and write down how it went.
+
+        One failing step is logged and recorded, not allowed to stop the others: a broken
+        reminder job must never stop expired holds going back on sale.
+        """
+        if not enabled:
+            return
+        now_m = time.monotonic()
+        if now_m - self._last_run.get(name, -1e9) < interval:
+            return
+        self._last_run[name] = now_m
+        started = datetime.now(UTC)
+        error: str | None = None
+        try:
+            await job()
+            await session.commit()
+        except Exception as exc:
+            await session.rollback()
+            error = f"{type(exc).__name__}: {exc}"
+            logger.exception("sweeper_step_failed", step=name)
+        # Fast jobs run every few seconds: write their record at most every 30 s, but never
+        # hide a failure or a first run.
+        if error is None and now_m - self._last_recorded.get(name, -1e9) < 30:
+            return
+        self._last_recorded[name] = now_m
+        try:
+            await OpsRepository(session).record_run(
+                name=name,
+                label=SCHEDULES.get(name, name),
+                interval_seconds=int(interval),
+                started=started,
+                finished=datetime.now(UTC),
+                error=error,
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("job_run_record_failed", step=name)
+
     async def _sweep(self, session: AsyncSession) -> None:
         settings = self.settings
+        every = settings.worker_sweep_interval_seconds
         outbox = OutboxService(session)
         cache = CatalogueCache(get_redis())
         inventory = InventoryService(session, settings.reservation_hold_seconds)
         bookings = BookingService(session, settings, inventory, outbox)
 
-        # 1. Expired holds go back on sale. The single most time-sensitive
-        #    job during a drop — every second of delay is a seat nobody can
-        #    buy.
-        released = await inventory.sweep_expired()
-        if released:
-            await session.commit()
-            await cache.invalidate_lists()
+        async def release_holds() -> None:
+            # The most time-sensitive job during a drop: every second of delay is a seat
+            # nobody can buy.
+            if await inventory.sweep_expired():
+                await session.commit()
+                await cache.invalidate_lists()
 
-        # 2. Pending bookings whose hold ran out.
-        await bookings.sweep_expired()
+        async def recover_locks() -> None:
+            stale_before = datetime.now(UTC) - timedelta(minutes=STALE_LOCK_MINUTES)
+            recovered = await OutboxRepository(session).release_stale_locks(older_than=stale_before)
+            if recovered:
+                await session.commit()
+                logger.info("outbox_stale_locks_released", count=recovered)
 
-        # 3. Work abandoned by a worker that died mid-message.
-        stale_before = datetime.now(UTC) - timedelta(minutes=STALE_LOCK_MINUTES)
-        recovered = await OutboxRepository(session).release_stale_locks(older_than=stale_before)
-        if recovered:
-            await session.commit()
-            logger.info("outbox_stale_locks_released", count=recovered)
-
-        # 4. Reminders for events starting soon. Cheap, but not needed every
-        #    few seconds, so it runs on its own slower clock.
-        if settings.email_configured and (
-            time.monotonic() - self._last_reminder_sweep >= settings.reminder_sweep_interval_seconds
-        ):
-            self._last_reminder_sweep = time.monotonic()
+        async def reminders() -> None:
             notifications = NotificationService(session, settings, TicketService(session, outbox))
             queued = await notifications.enqueue_due_reminders(datetime.now(UTC))
             if queued:
                 logger.info("reminders_queued", count=queued)
 
-        # 4b. A reminder for people who left a booking unpaid, on the same slow clock.
-        if settings.email_configured and (
-            time.monotonic() - self._last_abandoned_sweep
-            >= settings.reminder_sweep_interval_seconds
-        ):
-            self._last_abandoned_sweep = time.monotonic()
+        async def abandoned() -> None:
             asked = await AbandonedBookingService(session, outbox).queue_due(datetime.now(UTC))
             if asked:
                 logger.info("abandoned_reminders_queued", count=asked)
 
-        # 4c. Doors opening soon for the people working the night, and old notifications cleared.
-        if time.monotonic() - self._last_doors_sweep >= 300:
-            self._last_doors_sweep = time.monotonic()
+        async def doors() -> None:
             told = await Notifier(session).doors_open_soon(datetime.now(UTC))
-            await session.commit()
             if told:
                 logger.info("doors_notifications_sent", count=told)
-        if time.monotonic() - self._last_prune >= 6 * 3600:
-            self._last_prune = time.monotonic()
-            await NotificationCenter(session, outbox).prune()
-            await session.commit()
 
-        # 5. Waitlists: tickets that have come back since the last look.
-        if time.monotonic() - self._last_waitlist_sweep >= settings.waitlist_sweep_interval_seconds:
-            self._last_waitlist_sweep = time.monotonic()
+        async def waitlist() -> None:
             told = await WaitlistService(session, outbox).notify_available()
             if told:
                 logger.info("waitlist_notified", count=told)
 
-        # 6. Payments and refunds the provider never finished telling us
-        #    about. Skipped while no provider is configured.
-        if settings.payment_provider:
+        async def reconcile() -> None:
             provider = get_payment_provider(settings.payment_provider)
             refunds = RefundService(session, settings, provider, outbox)
             payments = PaymentService(session, settings, provider, bookings, refunds)
             await payments.reconcile_in_flight()
             await refunds.reconcile_in_flight()
+
+        async def cleanup() -> None:
+            now = datetime.now(UTC)
+            await NotificationCenter(session, outbox).prune(now)
+            await OpsRepository(session).prune_done(older_than=now - timedelta(days=30))
+            await OpsRepository(session).forget_workers_before(now - timedelta(days=7))
+
+        step = self._step
+        await step(session, "release_holds", every, release_holds)
+        await step(session, "expire_bookings", every, bookings.sweep_expired)
+        await step(session, "recover_locks", every, recover_locks)
+        await step(
+            session,
+            "reminders",
+            settings.reminder_sweep_interval_seconds,
+            reminders,
+            enabled=settings.email_configured,
+        )
+        await step(
+            session,
+            "abandoned",
+            settings.reminder_sweep_interval_seconds,
+            abandoned,
+            enabled=settings.email_configured,
+        )
+        await step(session, "doors", 300, doors)
+        await step(session, "waitlist", settings.waitlist_sweep_interval_seconds, waitlist)
+        await step(session, "reconcile", every, reconcile, enabled=bool(settings.payment_provider))
+        await step(session, "cleanup", 6 * 3600, cleanup)
+
+    # --------------------------------------------------------- heartbeat ---
+
+    async def run_heartbeat(self) -> None:
+        """Say "still here" every few seconds, so the API can tell when this process has died."""
+        sessionmaker = get_sessionmaker()
+        host = socket.gethostname()
+        while not self._stopping.is_set():
+            try:
+                async with sessionmaker() as session:
+                    await OpsRepository(session).beat(
+                        worker_id=self.worker_id, host=host, now=datetime.now(UTC)
+                    )
+                    await session.commit()
+            except Exception:
+                logger.exception("heartbeat_failed")
+            await self._sleep(HEARTBEAT_SECONDS)
 
 
 # -------------------------------------------------------------- entrypoint ---
@@ -486,7 +556,7 @@ async def run() -> None:
         poll_interval=settings.worker_poll_interval_seconds,
     )
     try:
-        await asyncio.gather(worker.run_outbox(), worker.run_sweeper())
+        await asyncio.gather(worker.run_outbox(), worker.run_sweeper(), worker.run_heartbeat())
     finally:
         await close_redis()
         await dispose_engine()

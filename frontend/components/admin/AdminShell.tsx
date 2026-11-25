@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { RequireRole } from "@/components/RequireRole";
+import { JobsBanner } from "@/components/admin/JobsBanner";
 import { TableLabels } from "@/components/admin/TableLabels";
 
 const NAV = [
@@ -9,6 +10,7 @@ const NAV = [
   { href: "/admin/sales", label: "Sales", match: (p: string) => p.startsWith("/admin/sales") },
   { href: "/admin/bookings", label: "Bookings", match: (p: string) => p.startsWith("/admin/bookings") },
   { href: "/admin/newsletters", label: "Newsletters", match: (p: string) => p.startsWith("/admin/newsletters") },
+  { href: "/admin/jobs", label: "Jobs", match: (p: string) => p.startsWith("/admin/jobs") },
   { href: "/admin/inbox", label: "Inbox", match: (p: string) => p.startsWith("/admin/inbox") },
   { href: "/admin/artists", label: "Artists", match: (p: string) => p.startsWith("/admin/artists") },
   { href: "/admin/archive", label: "Archive", match: (p: string) => p.startsWith("/admin/archive") },
@@ -34,7 +36,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <span className="small" title={user.email}>{user.full_name ?? user.email}</span>
             </div>
           </aside>
-          <main className="ad-main"><TableLabels />{children}</main>
+          <main className="ad-main"><TableLabels /><JobsBanner />{children}</main>
         </div>
       )}
     </RequireRole>

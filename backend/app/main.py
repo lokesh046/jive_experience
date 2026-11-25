@@ -6,8 +6,11 @@ build an isolated instance with overridden settings.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import FastAPI
@@ -15,14 +18,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app import __version__
-from app.core.config import Settings, assert_production_ready, get_settings
+from app.core.config import Environment, Settings, assert_production_ready, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
-from app.core.redis import close_redis, create_redis
-from app.db.session import create_engine, dispose_engine
+from app.core.redis import close_redis, create_redis, get_redis
+from app.db.session import create_engine, dispose_engine, get_sessionmaker
 from app.router.v1 import system
 from app.router.v1.router import api_router
+from app.services.health import HealthService
 
 logger = structlog.get_logger(__name__)
 
@@ -65,6 +69,26 @@ TAGS_METADATA = [
 ]
 
 
+async def _watch_worker(interval: float) -> None:
+    """Every minute, look at the worker's heartbeat and the queue, and alert on a change.
+
+    Runs in the API because the worker cannot report its own death. One alert per outage is
+    guaranteed by the alert's own key, so several API processes watching is harmless; the lock
+    only saves them repeating the work.
+    """
+    sessionmaker = get_sessionmaker()
+    while True:
+        try:
+            if await get_redis().set("health:monitor", "1", ex=max(10, int(interval) - 5), nx=True):
+                async with sessionmaker() as session:
+                    await HealthService(session).check_and_alert(datetime.now(UTC))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("health_check_failed")
+        await asyncio.sleep(interval)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Open the database and Redis connections; close them on shutdown."""
@@ -76,9 +100,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         environment=settings.environment.value,
         version=__version__,
     )
+    watcher: asyncio.Task[None] | None = None
+    if settings.environment is not Environment.TEST and settings.health_check_interval_seconds > 0:
+        watcher = asyncio.create_task(_watch_worker(settings.health_check_interval_seconds))
     try:
         yield
     finally:
+        if watcher is not None:
+            watcher.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await watcher
         await close_redis()
         await dispose_engine()
         logger.info("application_stopped")

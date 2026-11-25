@@ -37,6 +37,7 @@ from app.services.booking import BookingService
 from app.services.cache import CatalogueCache
 from app.services.catalogue import CatalogueService
 from app.services.google_oauth import GoogleOAuthClient
+from app.services.health import AdminJobsService
 from app.services.inventory import InventoryService
 from app.services.leads import LeadService
 from app.services.newsletter import NewsletterService
@@ -176,6 +177,10 @@ def get_push_service(session: DbSession, settings: AppSettings) -> PushService:
     return PushService(session, settings)
 
 
+def get_admin_jobs_service(session: DbSession) -> AdminJobsService:
+    return AdminJobsService(session)
+
+
 def get_archive_service(session: DbSession) -> ArchiveService:
     return ArchiveService(session)
 
@@ -259,6 +264,7 @@ ArchiveServiceDep = Annotated[ArchiveService, Depends(get_archive_service)]
 NewsletterServiceDep = Annotated[NewsletterService, Depends(get_newsletter_service)]
 NotificationCenterDep = Annotated[NotificationCenter, Depends(get_notification_center)]
 PushServiceDep = Annotated[PushService, Depends(get_push_service)]
+AdminJobsDep = Annotated[AdminJobsService, Depends(get_admin_jobs_service)]
 SettingsServiceDep = Annotated[SettingsService, Depends(get_settings_service)]
 
 

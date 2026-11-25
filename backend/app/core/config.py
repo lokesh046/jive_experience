@@ -134,6 +134,8 @@ class Settings(BaseSettings):
     # Reminder email to ticket holders this many hours before the event starts.
     reminder_hours_before: Annotated[int, Field(ge=1, le=168)] = 24
     reminder_sweep_interval_seconds: float = 900.0
+    # How often the API checks that the worker is alive and the queue is moving. 0 switches it off.
+    health_check_interval_seconds: float = 60.0
     # How often the worker looks for tickets that have come back for people on a waitlist.
     waitlist_sweep_interval_seconds: float = 60.0
 
