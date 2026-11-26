@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.errors import BusinessRuleError, ServiceUnavailableError
+from app.core.expopush import send_expo
 from app.core.webpush import Device, PushResult, send_push
 from app.models.notification import Notification
 from app.models.push_subscription import PushSubscription
@@ -58,6 +59,25 @@ class PushService:
         await self.session.commit()
         return len(await self.devices.for_user(user.id))
 
+    async def subscribe_phone(self, user: User, *, token: str, platform: str) -> int:
+        """Register the phone app. Needs no server keys: Expo carries the message on."""
+        mine = {d.endpoint for d in await self.devices.for_user(user.id)}
+        if token not in mine and len(mine) >= MAX_DEVICES:
+            raise BusinessRuleError(
+                "That is too many devices. Turn notifications off on one you no longer use.",
+                code="TOO_MANY_DEVICES",
+            )
+        await self.devices.upsert(
+            user_id=user.id,
+            endpoint=token,
+            p256dh="expo",
+            auth="expo",
+            user_agent=f"JIVE app ({platform})",
+            provider="expo",
+        )
+        await self.session.commit()
+        return len(await self.devices.for_user(user.id))
+
     async def unsubscribe(self, user: User, *, endpoint: str) -> None:
         await self.devices.remove(user_id=user.id, endpoint=endpoint)
         await self.session.commit()
@@ -67,7 +87,6 @@ class PushService:
 
     async def send_test(self, user: User) -> int:
         """A real push to this person's own devices, so they can see it works."""
-        self._require()
         payload = {
             "title": "Notifications are on",
             "body": "This is how JIVE will tell you when something needs you.",
@@ -83,12 +102,14 @@ class PushService:
 
     async def deliver_notification(self, notification_id: uuid.UUID) -> int:
         """Push one notification to every device its owner turned on. Returns how many got it."""
-        if not self.settings.push_configured:
-            return 0
         note = await self.session.get(Notification, notification_id)
         if note is None:
             return 0
-        devices = list(await self.devices.for_user(note.user_id))
+        devices = [
+            d
+            for d in await self.devices.for_user(note.user_id)
+            if d.provider == "expo" or self.settings.push_configured
+        ]
         if not devices:
             return 0
         payload = {
@@ -111,12 +132,17 @@ class PushService:
         self, device: PushSubscription, payload: dict[str, str], *, urgency: str = "normal"
     ) -> PushResult:
         sub_id = device.id
-        result = await send_push(
-            self.settings,
-            Device(endpoint=device.endpoint, p256dh=device.p256dh, auth=device.auth),
-            payload,
-            urgency=urgency,
-        )
+        if device.provider == "expo":
+            result = await send_expo(device.endpoint, payload, urgency=urgency)
+        elif not self.settings.push_configured:
+            return PushResult.REFUSED
+        else:
+            result = await send_push(
+                self.settings,
+                Device(endpoint=device.endpoint, p256dh=device.p256dh, auth=device.auth),
+                payload,
+                urgency=urgency,
+            )
         if result is PushResult.SENT:
             await self.devices.sent(sub_id)
         elif result is PushResult.GONE or await self.devices.failed(sub_id) >= GIVE_UP_AFTER:

@@ -22,12 +22,18 @@ class PushRepository(BaseRepository[PushSubscription]):
         p256dh: str,
         auth: str,
         user_agent: str | None,
+        provider: str = "webpush",
     ) -> None:
         """One row per device. A device signed in as someone else now belongs to this person."""
         statement = (
             insert(PushSubscription)
             .values(
-                user_id=user_id, endpoint=endpoint, p256dh=p256dh, auth=auth, user_agent=user_agent
+                user_id=user_id,
+                endpoint=endpoint,
+                p256dh=p256dh,
+                auth=auth,
+                user_agent=user_agent,
+                provider=provider,
             )
             .on_conflict_do_update(
                 index_elements=["endpoint"],
@@ -36,6 +42,7 @@ class PushRepository(BaseRepository[PushSubscription]):
                     "p256dh": p256dh,
                     "auth": auth,
                     "user_agent": user_agent,
+                    "provider": provider,
                     "failures": 0,
                 },
             )

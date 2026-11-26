@@ -23,6 +23,10 @@ class PushSubscription(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # The device's public key and auth secret: what we encrypt each message with.
     p256dh: Mapped[str] = mapped_column(String(200), nullable=False)
     auth: Mapped[str] = mapped_column(String(100), nullable=False)
+    # "webpush" for a browser, "expo" for the phone app (endpoint holds the Expo push token).
+    provider: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="webpush", server_default="webpush"
+    )
     user_agent: Mapped[str | None] = mapped_column(String(300))
     last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Consecutive failures that were not a clear "this device is gone".

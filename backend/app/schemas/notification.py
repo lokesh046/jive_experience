@@ -75,6 +75,15 @@ class PushSubscribeIn(BaseModel):
     keys: PushKeys
 
 
+class PhoneDeviceIn(BaseModel):
+    """The phone app's Expo push token."""
+
+    token: Annotated[
+        str, Field(min_length=20, max_length=200, pattern=r"^(Exponent|Expo)PushToken\[[^\]]+\]$")
+    ]
+    platform: Annotated[str, Field(pattern=r"^(ios|android)$")]
+
+
 class PushUnsubscribeIn(BaseModel):
     endpoint: Annotated[str, Field(min_length=20, max_length=1024)]
 

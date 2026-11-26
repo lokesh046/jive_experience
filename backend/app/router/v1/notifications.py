@@ -15,6 +15,7 @@ from app.schemas.notification import (
     FeedOut,
     MarkRead,
     NotificationOut,
+    PhoneDeviceIn,
     PreferenceOut,
     PreferencesIn,
     PushDevicesOut,
@@ -125,6 +126,20 @@ async def push_subscribe(
         user_agent=user_agent,
     )
     return PushDevicesOut(devices=count)
+
+
+@router.post(
+    "/push/device",
+    response_model=PushDevicesOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Turn push on for the phone app",
+)
+async def push_device(
+    payload: PhoneDeviceIn, user: CurrentUser, service: PushServiceDep
+) -> PushDevicesOut:
+    return PushDevicesOut(
+        devices=await service.subscribe_phone(user, token=payload.token, platform=payload.platform)
+    )
 
 
 @router.post("/push/unsubscribe", response_model=PushDevicesOut, summary="Turn push off here")
