@@ -1,25 +1,39 @@
-import { Image } from "expo-image";
+import type React from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import * as Linking from "expo-linking";
+import { useEffect, useRef, useState } from "react";
+import { FlatList, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { WebView } from "react-native-webview";
+import { WaitlistForm } from "@/components/Forms";
+import { Photo } from "@/components/Photo";
 import { TicketPicker, usePicker } from "@/components/TicketPicker";
 import { Body, Chip, ErrorLine, H1, H2, Label, PillButton } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { BOOKING_MESSAGES, idempotencyKey } from "@/lib/booking";
-import { inr, longDate, timeOf } from "@/lib/format";
+import { googleCalendarUrl } from "@/lib/calendar";
+import { dayMonth, inr, longDate, timeOf } from "@/lib/format";
+import { addressOf, embedUrl, isWebLink, mapQuery, searchUrl } from "@/lib/maps";
+import { describePolicy } from "@/lib/policy";
+import { SITE_URL } from "@/lib/config";
+import { eventImage, site } from "@/lib/images";
 import type { Booking, EventDetail } from "@/lib/types";
 import { color, font } from "@/theme";
 
 export default function EventScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const [ticketsY, setTicketsY] = useState(0);
+  const [bodyY, setBodyY] = useState(0);
   const [e, setE] = useState<EventDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const p = usePicker(e);
   const [busy, setBusy] = useState(false);
   const [bookError, setBookError] = useState<string | null>(null);
-  const sellable = !!e && e.on_sale && !e.is_past && e.status !== "CANCELLED";
+  const cancelled = e?.status === "CANCELLED";
+  const sellable = !!e && e.on_sale && !e.is_past && !cancelled;
 
   useEffect(() => {
     api<EventDetail>(`events/${slug}`).then(setE).catch((x) => setError(x?.message ?? "Could not load this event."));
@@ -39,43 +53,128 @@ export default function EventScreen() {
     } finally { setBusy(false); }
   }
 
+  const v = e?.venue;
+  const prices = e ? e.ticket_categories.filter((c) => !c.is_sold_out).map((c) => c.price_paise) : [];
+  const photos = e ? [...new Set([e.banner_image_url, ...e.gallery_image_urls].filter((u): u is string => !!u))] : [];
+  if (e && photos.length === 0) photos.push(eventImage(e, "banner") || site("hero"));
+  const refundLines = describePolicy(e?.cancellation_policy);
+  const link = v ? [e?.location_url, v.map_url].find(isWebLink) ?? null : null;
+  const query = v ? mapQuery(v, link) : "";
   const closed = e?.is_past ? "This night has passed. Tickets are no longer on sale."
-    : e?.status === "CANCELLED" ? "This event has been cancelled."
-    : e?.is_sold_out ? "This event is sold out." : "Tickets are not on sale right now.";
+    : cancelled ? "This event has been cancelled."
+    : e?.is_sold_out ? "This event is sold out."
+    : e?.sale_starts_at && new Date(e.sale_starts_at) > new Date() ? `Tickets go on sale ${longDate(e.sale_starts_at, e.timezone)}, ${timeOf(e.sale_starts_at, e.timezone)}.`
+    : "Ticket sales have closed.";
+  const H = (t: string) => <H2 style={{ marginTop: 36 }}>{t}</H2>;
 
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
       <Stack.Screen options={{ headerShown: true, headerTransparent: true, headerTitle: "", headerTintColor: color.white, headerBackButtonDisplayMode: "minimal" }} />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 56 }} keyboardShouldPersistTaps="handled">
         {error && <Body style={{ padding: 20, paddingTop: 100 }}>{error}</Body>}
-        {e && (
+        {e && v && (
           <>
-            <Image source={e.banner_image_url ?? e.thumbnail_image_url} style={{ width: "100%", height: 340 }} contentFit="cover" />
-            <View style={{ padding: 20, gap: 10 }}>
-              {e.is_past && <Chip label="Past event" />}
-              {e.status === "CANCELLED" && <Chip label="Cancelled" tone="bad" />}
+            {/* Photos: swipe through the banner and gallery. */}
+            <FlatList horizontal pagingEnabled showsHorizontalScrollIndicator={false} data={photos} keyExtractor={(u) => u}
+              renderItem={({ item }) => <Photo source={item} style={{ width, height: 340 }} />} />
+            {photos.length > 1 && <Body style={{ fontSize: 12, textAlign: "center", marginTop: 8 }}>Swipe for more photos · {photos.length}</Body>}
+
+            <View onLayout={(ev) => setBodyY(ev.nativeEvent.layout.y)} style={{ padding: 20, gap: 10 }}>
+              {e.is_past && !cancelled && <Chip label="Past event" />}
+              {cancelled && <Chip label="Cancelled" tone="bad" />}
               <H1>{e.title}</H1>
+              {!!e.subtitle && <Body>{e.subtitle}</Body>}
               <Body style={{ color: color.text }}>{longDate(e.starts_at, e.timezone)}, {timeOf(e.starts_at, e.timezone)}</Body>
-              <Body>{e.venue.name}, {e.venue.city}</Body>
+              <Body>{v.name}, {v.city}</Body>
+
+              <View style={{ gap: 10, marginTop: 8 }}>
+                <PillButton
+                  label={e.is_past ? "See upcoming events" : e.on_sale ? "Get tickets" : "See details"}
+                  onPress={() => (e.is_past ? router.replace("/events") : scroll.current?.scrollTo({ y: Math.max(0, bodyY + ticketsY - 12), animated: true }))}
+                />
+                {!e.is_past && (
+                  <PillButton label="Add to calendar" tone="ghost" arrow={false}
+                    onPress={() => Linking.openURL(googleCalendarUrl({ title: e.title, subtitle: e.subtitle, starts_at: e.starts_at, ends_at: e.ends_at, where: addressOf(v), url: `${SITE_URL}/events/${e.slug}` })).catch(() => {})} />
+                )}
+              </View>
 
               {!!e.description && (
-                <View style={{ marginTop: 20, gap: 10 }}>
-                  <H2>The night</H2>
+                <View style={{ gap: 10 }}>
+                  {H("The night")}
                   {e.description.split(/\n{2,}/).map((t, i) => <Body key={i}>{t.trim()}</Body>)}
                 </View>
               )}
 
+              <View onLayout={(ev) => setTicketsY(ev.nativeEvent.layout.y)} style={{ gap: 10 }}>
+                {H("Tickets")}
+                {sellable && prices.length > 0 && <Body>From {inr(Math.min(...prices))}</Body>}
+                {sellable ? <TicketPicker e={e} p={p} /> : <Body>{closed}</Body>}
+                {!e.on_sale && e.is_sold_out && !e.is_past && !cancelled && (
+                  <View style={{ marginTop: 12 }}><WaitlistForm slug={e.slug} categories={e.ticket_categories.map((c) => ({ id: c.id, name: c.name }))} /></View>
+                )}
+              </View>
+
               {e.lineup.length > 0 && (
-                <View style={{ marginTop: 20, gap: 8 }}>
-                  <Label>Lineup</Label>
+                <View style={{ gap: 14 }}>
+                  {H("Lineup")}
                   {e.lineup.map((l, i) => (
-                    <Text key={i} style={{ fontFamily: font.serif, fontSize: 20, color: color.white }}>{l.name}{l.role ? <Text style={{ fontFamily: font.sans, fontSize: 14, color: color.muted }}>  {l.role}</Text> : null}</Text>
+                    <View key={`${l.name}-${i}`} style={{ flexDirection: "row", gap: 14, alignItems: "center" }}>
+                      {l.photo_url
+                        ? <Photo source={l.photo_url} style={{ width: 72, height: 72, borderRadius: 36 }} />
+                        : <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: color.surfaceHigh, alignItems: "center", justifyContent: "center" }}><Text style={{ fontFamily: font.serif, fontSize: 28, color: color.white }}>{l.name.charAt(0).toUpperCase()}</Text></View>}
+                      <View style={{ flex: 1, gap: 2 }}>
+                        {!!l.performs_at && <Label>{dayMonth(l.performs_at, e.timezone) === dayMonth(e.starts_at, e.timezone) ? timeOf(l.performs_at, e.timezone) : `${dayMonth(l.performs_at, e.timezone)} · ${timeOf(l.performs_at, e.timezone)}`}</Label>}
+                        <Text style={{ fontFamily: font.serif, fontSize: 22, color: color.white }}>{l.name}</Text>
+                        {!!l.role && <Body style={{ fontSize: 14 }}>{l.role}</Body>}
+                      </View>
+                    </View>
                   ))}
                 </View>
               )}
 
-              <View style={{ marginTop: 24 }}>
-                {sellable ? <TicketPicker e={e} p={p} /> : <Body>{closed}</Body>}
+              <View style={{ gap: 10 }}>
+                {H("The venue")}
+                <Body><Text style={{ color: color.white, fontFamily: font.sansMedium }}>{v.name}</Text>, {v.city}{v.state ? `, ${v.state}` : ""}.</Body>
+                {(v.description ?? "").split(/\n{2,}/).map((t) => t.trim()).filter(Boolean).map((t, i) => <Body key={i}>{t}</Body>)}
+                {!!v.directions && <Body>{v.directions}</Body>}
+                {(v.image_urls ?? []).length > 0 && (
+                  <FlatList horizontal data={v.image_urls} keyExtractor={(u) => u} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }} style={{ marginTop: 6 }}
+                    renderItem={({ item }) => <Photo source={item} style={{ width: 260, height: 180, borderRadius: 18 }} />} />
+                )}
+                {(v.benefits ?? []).length > 0 && (
+                  <View style={{ gap: 8, marginTop: 8 }}>
+                    <Label>What the venue offers</Label>
+                    {v.benefits!.map((b, i) => <Body key={i} style={{ color: color.text }}>•  {b}</Body>)}
+                  </View>
+                )}
+              </View>
+
+              <View style={{ gap: 12 }}>
+                {H("Location")}
+                <View style={{ height: 220, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: color.line }}>
+                  <WebView source={{ uri: embedUrl(query) }} originWhitelist={["https://*"]} scrollEnabled={false} style={{ flex: 1, backgroundColor: color.surface }} accessibilityLabel={`Map showing ${addressOf(v)}`} />
+                </View>
+                <View style={{ gap: 2 }}>
+                  <Text style={{ fontFamily: font.sansBold, color: color.white }}>{v.name}</Text>
+                  {!!(v.address_line1 || v.address_line2) && <Body style={{ fontSize: 14 }}>{[v.address_line1, v.address_line2].filter(Boolean).join(", ")}</Body>}
+                  <Body style={{ fontSize: 14 }}>{[v.city, v.state, v.postal_code].filter(Boolean).join(", ")}</Body>
+                </View>
+                <PillButton label="Open in Maps" tone="ghost" onPress={() => Linking.openURL(link ?? searchUrl(query)).catch(() => {})} />
+              </View>
+
+              <View style={{ gap: 10 }}>
+                {H("Good to know")}
+                <Label>Cancellations and refunds</Label>
+                {refundLines.length > 0
+                  ? refundLines.map((t, i) => <Body key={i} style={{ color: color.text }}>•  {t}</Body>)
+                  : <Body>This event has no online cancellation. If your plans change, contact us and we will help.</Body>}
+                <Text onPress={() => Linking.openURL(`${SITE_URL}/cancellation-policy`).catch(() => {})} style={{ fontFamily: font.sansMedium, color: color.white, textDecorationLine: "underline" }}>Read the full policy</Text>
+                {!!e.terms_and_conditions && (
+                  <View style={{ gap: 8, marginTop: 10 }}>
+                    <Label>Terms for this event</Label>
+                    {e.terms_and_conditions.split(/\r?\n/).map((t) => t.trim()).filter(Boolean).map((t, i) => <Body key={i} style={{ color: color.text }}>•  {t}</Body>)}
+                  </View>
+                )}
               </View>
             </View>
           </>

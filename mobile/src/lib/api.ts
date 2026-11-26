@@ -38,23 +38,28 @@ export async function clearTokens() {
 
 export const refreshToken = () => SecureStore.getItemAsync(REFRESH);
 
-// One refresh at a time, however many requests hit 401 together.
-let refreshing: Promise<boolean> | null = null;
-function refreshOnce(): Promise<boolean> {
-  refreshing ??= (async () => {
+export type Refreshed = TokenPair | "rejected" | "offline" | "none";
+
+// One refresh at a time, however many callers ask together. The server treats a refresh token
+// used twice as stolen and ends the session, so two requests must never carry the same one.
+let refreshing: Promise<Refreshed> | null = null;
+export function refreshOnce(): Promise<Refreshed> {
+  refreshing ??= (async (): Promise<Refreshed> => {
     try {
       const rt = await SecureStore.getItemAsync(REFRESH);
-      if (!rt) return false;
+      if (!rt) return "none";
       const res = await fetch(`${API_V1}/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: rt }),
       });
-      if (!res.ok) return false;
-      await saveTokens((await res.json()) as TokenPair);
-      return true;
+      if (res.status === 401 || res.status === 403) return "rejected";
+      if (!res.ok) return "offline";
+      const pair = (await res.json()) as TokenPair;
+      await saveTokens(pair);
+      return pair;
     } catch {
-      return false;
+      return "offline";
     } finally {
       setTimeout(() => { refreshing = null; }, 0);
     }
@@ -82,7 +87,8 @@ export async function api<T>(path: string, init: Init = {}): Promise<T> {
   try {
     res = await send(path, init);
     if (res.status === 401 && access && !path.startsWith("auth/")) {
-      if (await refreshOnce()) res = await send(path, init);
+      const r = await refreshOnce();
+      if (typeof r === "object") res = await send(path, init);
       else {
         await clearTokens();
         onSignedOut();

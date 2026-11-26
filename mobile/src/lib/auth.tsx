@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { disablePush } from "./push";
-import { api, clearTokens, loadTokens, refreshToken, saveTokens, setSignedOutHandler } from "./api";
+import { api, clearTokens, loadTokens, refreshOnce, refreshToken, saveTokens, setSignedOutHandler } from "./api";
 import type { AuthUser, TokenPair } from "./types";
 
 type Status = "loading" | "signedOut" | "signedIn";
@@ -23,18 +23,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setSignedOutHandler(drop);
     (async () => {
-      const rt = await loadTokens();
-      if (!rt) return drop();
-      try {
-        // The refresh call hands back a fresh pair and who we are in one go.
-        const pair = await api<TokenPair>("auth/refresh", { method: "POST", json: { refresh_token: rt } });
-        await saveTokens(pair);
-        setUser(pair.user);
-        setStatus("signedIn");
-      } catch (e: any) {
-        // Offline at launch must not sign the person out; only a refused token does.
-        if (e?.status === 401 || e?.status === 403) { await clearTokens(); drop(); } else drop();
-      }
+      await loadTokens();
+      // Who we are comes back with a fresh pair. A refused token signs out; no network does not.
+      const r = await refreshOnce();
+      if (typeof r === "object") { setUser(r.user); setStatus("signedIn"); return; }
+      if (r === "rejected") await clearTokens();
+      drop();
     })();
   }, [drop]);
 

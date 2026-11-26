@@ -5,3 +5,6 @@ export const API_V1 = `${API_URL}/api/v1`;
 
 // Where the website lives, for the policy pages the app links to.
 export const SITE_URL = process.env.EXPO_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+// The cloud name is public: it is part of every photo's address.
+export const CLOUDINARY_CLOUD = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD ?? "five0iut";

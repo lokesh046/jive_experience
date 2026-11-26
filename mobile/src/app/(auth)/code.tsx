@@ -17,6 +17,8 @@ export default function Code() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wait, setWait] = useState(60);
+  // Reached without an email (a stray link): there is nothing to verify, so start over.
+  useEffect(() => { if (!email) router.replace("/signin"); }, [email, router]);
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   useEffect(() => {
@@ -83,7 +85,7 @@ export default function Code() {
           <Pressable onPress={resend} disabled={wait > 0 || busy} accessibilityRole="button">
             <Text style={{ fontFamily: font.sansMedium, color: wait > 0 ? color.faint : color.white }}>{wait > 0 ? `Send a new code in ${wait}s` : "Send a new code"}</Text>
           </Pressable>
-          <Pressable onPress={() => router.back()} accessibilityRole="button">
+          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/signin"))} accessibilityRole="button">
             <Text style={{ fontFamily: font.sansMedium, color: color.muted }}>Change email</Text>
           </Pressable>
         </ScrollView>

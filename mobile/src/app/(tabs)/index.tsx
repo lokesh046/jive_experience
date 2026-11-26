@@ -1,25 +1,41 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { EventCard } from "@/components/EventCard";
-import { Body, H1, H2, Label, PillButton } from "@/components/ui";
-import { dayMonth, timeOf } from "@/lib/format";
+import { EnquiryForm, NewsletterSignup } from "@/components/Forms";
+import { Photo } from "@/components/Photo";
+import { Body, H1, H2, PillButton } from "@/components/ui";
+import { PRIVATE_SERVICES } from "@/lib/content";
+import { dayMonth, inr, timeOf } from "@/lib/format";
+import { eventImage } from "@/lib/images";
 import { useEvents } from "@/lib/useEvents";
+import { useHomeExtras } from "@/lib/useHome";
 import { useUnread } from "@/lib/useUnread";
 import { color, font } from "@/theme";
 
+const Section = ({ title, action, children }: { title: string; action?: { label: string; onPress: () => void }; children: React.ReactNode }) => (
+  <View style={{ marginTop: 40, gap: 16 }}>
+    <View style={{ paddingHorizontal: 20, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <H2>{title}</H2>
+      {action && <Pressable onPress={action.onPress} accessibilityRole="link" hitSlop={8}><Text style={{ fontFamily: font.sansMedium, color: color.white, textDecorationLine: "underline" }}>{action.label}</Text></Pressable>}
+    </View>
+    {children}
+  </View>
+);
+
 export default function Home() {
   const { events, error, refreshing, refresh } = useEvents();
+  const { artists, archive } = useHomeExtras(events);
   const router = useRouter();
   const unread = useUnread();
-  const hero = events?.find((e) => e.is_featured && !e.is_sold_out) ?? events?.[0];
-  const rest = events?.filter((e) => e.id !== hero?.id) ?? [];
+  const hero = events?.find((e) => e.is_featured) ?? events?.[0];
+  const go = (slug: string) => router.push({ pathname: "/event/[slug]", params: { slug } });
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["top"]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={color.white} />}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={color.white} />}>
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text style={{ fontFamily: font.serif, fontSize: 30, color: color.white, letterSpacing: 6 }}>jive</Text>
           <Pressable onPress={() => router.push("/notifications")} accessibilityRole="button" accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"} hitSlop={10}>
@@ -29,36 +45,70 @@ export default function Home() {
         </View>
 
         {error && !events && <Body style={{ paddingHorizontal: 20 }}>{error} Pull down to try again.</Body>}
-        {!events && !error && <View style={{ marginHorizontal: 20, height: 360, borderRadius: 28, backgroundColor: color.surface }} />}
+        {!events && !error && <View style={{ marginHorizontal: 20, height: 420, borderRadius: 28, backgroundColor: color.surface }} />}
 
+        {/* The banner: the soonest night, or the one an admin marked for the homepage. */}
+        {events && !hero && (
+          <View style={{ paddingHorizontal: 20, gap: 8 }}>
+            <H1>Live music evenings</H1>
+            <Body>Intimate nights in converted mills, vaults and warehouses. New dates are announced here first.</Body>
+          </View>
+        )}
         {hero && (
-          <View style={{ marginHorizontal: 20, borderRadius: 28, overflow: "hidden", backgroundColor: color.surface }}>
-            <Image source={hero.banner_image_url ?? hero.thumbnail_image_url} style={{ width: "100%", height: 420 }} contentFit="cover" transition={200} />
-            <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: 20, gap: 10, backgroundColor: "rgba(10,10,10,0.62)" }}>
-              <H1 style={{ fontSize: 32, lineHeight: 36 }}>{hero.title}</H1>
-              <Body style={{ color: color.text }}>{dayMonth(hero.starts_at, hero.timezone)} · {timeOf(hero.starts_at, hero.timezone)}</Body>
-              <Body numberOfLines={1}>{hero.venue_name}, {hero.city}</Body>
-              <PillButton label="Get tickets" onPress={() => router.push({ pathname: "/event/[slug]", params: { slug: hero.slug } })} style={{ marginTop: 6 }} />
+          <View style={{ height: 560, justifyContent: "flex-end", overflow: "hidden", backgroundColor: color.surface }}>
+            <Photo source={eventImage(hero, "banner")} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} transition={250} />
+            {/* The website's banner fade: the photo shows through, darker towards the bottom. */}
+            <LinearGradient pointerEvents="none" colors={["rgba(0,0,0,0.12)", "rgba(0,0,0,0.38)", "rgba(10,10,10,0.92)", "#0a0a0a"]} locations={[0, 0.45, 0.82, 1]} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} />
+            <View style={{ padding: 20, paddingBottom: 28, gap: 8 }}>
+              <H1 style={{ fontSize: 40, lineHeight: 42 }}>{hero.title}</H1>
+              {!!hero.subtitle && <Body numberOfLines={2}>{hero.subtitle}</Body>}
+              <Body style={{ color: color.text }}>{dayMonth(hero.starts_at, hero.timezone)} · {timeOf(hero.starts_at, hero.timezone)}  ·  {hero.venue_name}, {hero.city}</Body>
+              <PillButton label={hero.starting_price_paise ? `Get tickets · from ${inr(hero.starting_price_paise)}` : "Get tickets"} onPress={() => go(hero.slug)} style={{ marginTop: 8 }} />
+              {events && events.length > 1 && <PillButton label="See all nights" tone="ghost" arrow={false} onPress={() => router.push("/events")} />}
             </View>
           </View>
         )}
 
-        {rest.length > 0 && (
-          <View style={{ marginTop: 32, gap: 12 }}>
-            <View style={{ paddingHorizontal: 20, gap: 4 }}>
-              <Label>Coming up</Label>
-              <H2>Upcoming nights</H2>
-            </View>
-            <FlatList
-              horizontal
-              data={rest}
-              keyExtractor={(e) => e.id}
-              renderItem={({ item }) => <EventCard e={item} wide />}
-              contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
-              showsHorizontalScrollIndicator={false}
-            />
-          </View>
+        {events && events.length > 0 && (
+          <Section title="Upcoming nights" action={{ label: "See all events", onPress: () => router.push("/events") }}>
+            <FlatList horizontal data={events.slice(0, 4)} keyExtractor={(e) => e.id} renderItem={({ item }) => <EventCard e={item} wide />} contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }} showsHorizontalScrollIndicator={false} />
+          </Section>
         )}
+
+        <Section title="Artists">
+          <FlatList horizontal data={artists} keyExtractor={(a) => a.name} showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
+            renderItem={({ item: a }) => (
+              <View style={{ width: 170, gap: 6 }}>
+                <Photo source={a.img} style={{ width: 170, height: 210, borderRadius: 20 }} />
+                <Text style={{ fontFamily: font.serif, fontSize: 20, color: color.white }}>{a.name}</Text>
+                {!!a.note && <Body style={{ fontSize: 13, lineHeight: 18 }} numberOfLines={3}>{a.note}</Body>}
+              </View>
+            )} />
+        </Section>
+
+        <Section title="From the archive">
+          <FlatList horizontal data={archive} keyExtractor={(a, i) => a.img + i} showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
+            renderItem={({ item: a }) => (
+              <View style={{ width: 260, gap: 8 }}>
+                <Photo source={a.img} style={{ width: 260, height: 190, borderRadius: 20 }} />
+                {!!a.caption && <Body style={{ fontSize: 13 }}>{a.caption}</Body>}
+              </View>
+            )} />
+        </Section>
+
+        <View style={{ marginTop: 40, paddingHorizontal: 20, gap: 14 }}>
+          <H2>Private bookings</H2>
+          <Body>Our rooms are available for private listening sessions, brand showcases and table reservations.</Body>
+          {PRIVATE_SERVICES.map((s) => (
+            <View key={s.name} style={{ padding: 16, borderRadius: 20, backgroundColor: color.surface, borderWidth: 1, borderColor: color.line, gap: 4 }}>
+              <Text style={{ fontFamily: font.sansBold, fontSize: 16, color: color.white }}>{s.name}</Text>
+              <Body style={{ fontSize: 14 }}>{s.note}</Body>
+            </View>
+          ))}
+          <View style={{ marginTop: 8 }}><EnquiryForm /></View>
+        </View>
+
+        <View style={{ marginTop: 48, paddingHorizontal: 20 }}><NewsletterSignup /></View>
       </ScrollView>
     </SafeAreaView>
   );
