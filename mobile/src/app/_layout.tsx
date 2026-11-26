@@ -4,7 +4,7 @@ import { DarkTheme, Stack, ThemeProvider, useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { enablePush, routeFor } from "@/lib/push";
 import { color } from "@/theme";
@@ -18,6 +18,13 @@ function Gate() {
   const { status } = useAuth();
   const router = useRouter();
   useEffect(() => { if (status !== "loading") SplashScreen.hideAsync(); }, [status]);
+
+  // Signing out must land on the sign-in screen, whatever screen the person was on.
+  const before = useRef(status);
+  useEffect(() => {
+    if (before.current === "signedIn" && status === "signedOut") router.replace("/signin");
+    before.current = status;
+  }, [status, router]);
   // A phone that already agreed keeps telling us who it belongs to. Never ask at launch.
   useEffect(() => {
     if (status === "signedIn") enablePush(false).catch(() => {});

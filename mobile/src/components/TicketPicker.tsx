@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
-import { Body, ErrorLine, H2 } from "@/components/ui";
+import { Body, ErrorLine } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { inr } from "@/lib/format";
 import type { EventDetail, PromoCheck, TicketCategoryPublic } from "@/lib/types";
@@ -54,7 +54,6 @@ export function TicketPicker({ e, p }: { e: EventDetail; p: PickerState }) {
   const [promoOpen, setPromoOpen] = useState(false);
   return (
     <View style={{ gap: 10 }}>
-      <H2>Tickets</H2>
       {e.ticket_categories.map((c) => {
         const on = p.cat?.id === c.id;
         return (

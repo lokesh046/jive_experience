@@ -1,5 +1,8 @@
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { disablePush } from "./push";
+import { API_V1 } from "./config";
 import { api, clearTokens, loadTokens, refreshOnce, refreshToken, saveTokens, setSignedOutHandler } from "./api";
 import type { AuthUser, TokenPair } from "./types";
 
@@ -9,8 +12,12 @@ interface Ctx {
   user: AuthUser | null;
   requestCode: (email: string) => Promise<void>;
   verifyCode: (email: string, code: string) => Promise<void>;
+  /** Resolves false when the person closed the Google window. */
+  googleSignIn: () => Promise<boolean>;
   signOut: () => Promise<void>;
 }
+
+WebBrowser.maybeCompleteAuthSession();
 
 const AuthContext = createContext<Ctx | null>(null);
 
@@ -43,6 +50,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("signedIn");
   }, []);
 
+  const googleSignIn = useCallback(async () => {
+    // Google comes back to the API, which hands the code on to this app's own link.
+    const appLink = Linking.createURL("auth/google");
+    const back = `${API_V1}/auth/google/mobile-return`;
+    const start = await api<{ authorization_url: string; state: string }>(
+      `auth/google/authorize?redirect_uri=${encodeURIComponent(back)}&app_redirect=${encodeURIComponent(appLink)}`,
+    );
+    const res = await WebBrowser.openAuthSessionAsync(start.authorization_url, appLink);
+    if (res.type !== "success") return false;
+    const q = Linking.parse(res.url).queryParams ?? {};
+    if (q.error || typeof q.code !== "string" || typeof q.state !== "string") throw new Error("Google did not sign you in. Please try again.");
+    const pair = await api<TokenPair>("auth/google/callback", { method: "POST", json: { code: q.code, state: q.state } });
+    await saveTokens(pair);
+    setUser(pair.user);
+    setStatus("signedIn");
+    return true;
+  }, []);
+
   const signOut = useCallback(async () => {
     await disablePush();   // this phone stops getting this person's notifications
     const rt = await refreshToken();
@@ -51,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     drop();
   }, [drop]);
 
-  const value = useMemo(() => ({ status, user, requestCode, verifyCode, signOut }), [status, user, requestCode, verifyCode, signOut]);
+  const value = useMemo(() => ({ status, user, requestCode, verifyCode, googleSignIn, signOut }), [status, user, requestCode, verifyCode, googleSignIn, signOut]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

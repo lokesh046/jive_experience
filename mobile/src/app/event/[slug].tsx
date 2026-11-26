@@ -8,6 +8,7 @@ import { WebView } from "react-native-webview";
 import { WaitlistForm } from "@/components/Forms";
 import { Photo } from "@/components/Photo";
 import { TicketPicker, usePicker } from "@/components/TicketPicker";
+import { TicketPreview } from "@/components/TicketPreview";
 import { Body, Chip, ErrorLine, H1, H2, Label, PillButton } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { BOOKING_MESSAGES, idempotencyKey } from "@/lib/booking";
@@ -15,6 +16,7 @@ import { googleCalendarUrl } from "@/lib/calendar";
 import { dayMonth, inr, longDate, timeOf } from "@/lib/format";
 import { addressOf, embedUrl, isWebLink, mapQuery, searchUrl } from "@/lib/maps";
 import { describePolicy } from "@/lib/policy";
+import { isPremiumType } from "@/lib/premium";
 import { SITE_URL } from "@/lib/config";
 import { eventImage, site } from "@/lib/images";
 import type { Booking, EventDetail } from "@/lib/types";
@@ -108,6 +110,20 @@ export default function EventScreen() {
               <View onLayout={(ev) => setTicketsY(ev.nativeEvent.layout.y)} style={{ gap: 10 }}>
                 {H("Tickets")}
                 {sellable && prices.length > 0 && <Body>From {inr(Math.min(...prices))}</Body>}
+                {sellable && (
+                  <View style={{ marginVertical: 8 }}>
+                    <TicketPreview
+                      when={`${longDate(e.starts_at, e.timezone)} · ${timeOf(e.starts_at, e.timezone)}`}
+                      title={e.title}
+                      venue={`${v.name}, ${v.city}`}
+                      ticket={p.cat?.name ?? null}
+                      premium={!!p.cat && isPremiumType(p.cat.name, p.cat.price_paise, e.ticket_categories.map((c) => c.price_paise))}
+                      year={String(new Date(e.starts_at).getFullYear())}
+                      admit={p.cat ? p.count : 0}
+                      total={p.cat ? inr(p.total) : null}
+                    />
+                  </View>
+                )}
                 {sellable ? <TicketPicker e={e} p={p} /> : <Body>{closed}</Body>}
                 {!e.on_sale && e.is_sold_out && !e.is_past && !cancelled && (
                   <View style={{ marginTop: 12 }}><WaitlistForm slug={e.slug} categories={e.ticket_categories.map((c) => ({ id: c.id, name: c.name }))} /></View>

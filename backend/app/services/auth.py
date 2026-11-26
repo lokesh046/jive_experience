@@ -18,6 +18,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlsplit
 
 import structlog
 from redis.asyncio import Redis
@@ -26,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.core.errors import (
     AuthenticationError,
+    BusinessRuleError,
     ConflictError,
     PermissionDeniedError,
 )
@@ -65,6 +67,7 @@ class IssuedTokens:
 
 
 OAUTH_STATE_PREFIX = "oauth:google:state"
+MOBILE_APP_SCHEMES = ("jive", "exp", "exps")  # the app, and Expo Go while developing
 
 EMAIL_CODE_PREFIX = "otp:email"
 EMAIL_CODE_TTL_SECONDS = 600
@@ -89,7 +92,9 @@ class AuthService:
 
     # ------------------------------------------------ customer Google login ---
 
-    async def start_google_sign_in(self, redirect_uri: str | None = None) -> AuthorizationRequest:
+    async def start_google_sign_in(
+        self, redirect_uri: str | None = None, app_redirect: str | None = None
+    ) -> AuthorizationRequest:
         """Begin the OAuth flow.
 
         The `state` and the PKCE verifier are held in Redis rather than in a
@@ -99,10 +104,20 @@ class AuthService:
         state = secrets.token_urlsafe(32)
         verifier, challenge = generate_pkce_pair()
         target = redirect_uri or self.settings.google_redirect_uri
+        pending = {"verifier": verifier, "redirect_uri": target}
+        if app_redirect is not None:
+            # The phone app cannot be Google's redirect target, so Google comes back to the API,
+            # which hands the code on to the app's own link. Only the app's schemes are allowed,
+            # so this can never send a code to a web page.
+            if urlsplit(app_redirect).scheme not in MOBILE_APP_SCHEMES:
+                raise BusinessRuleError(
+                    "That return address is not allowed.", code="BAD_APP_REDIRECT"
+                )
+            pending["app_redirect"] = app_redirect
 
         await self.redis.set(
             f"{OAUTH_STATE_PREFIX}:{state}",
-            json.dumps({"verifier": verifier, "redirect_uri": target}),
+            json.dumps(pending),
             ex=self.settings.oauth_state_ttl_seconds,
         )
 
@@ -241,6 +256,14 @@ class AuthService:
             user.email_verified_at = datetime.now(UTC)
         issued, _ = await self._issue(user, context=context, new_session=True)
         return issued
+
+    async def app_return_url(self, state: str) -> str | None:
+        """Where the phone app wants a Google sign-in handed back. Leaves the state in place."""
+        raw = await self.redis.get(f"{OAUTH_STATE_PREFIX}:{state}")
+        if raw is None:
+            return None
+        stored: dict[str, str] = json.loads(raw)
+        return stored.get("app_redirect")
 
     async def _consume_state(self, state: str) -> dict[str, str]:
         """Validate and single-use the pending sign-in.

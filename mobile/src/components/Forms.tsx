@@ -6,11 +6,11 @@ import { color, font } from "@/theme";
 
 const field = { height: 52, borderRadius: 26, paddingHorizontal: 20, backgroundColor: color.surface, color: color.white, fontFamily: font.sans, fontSize: 16, borderWidth: 1, borderColor: color.line } as const;
 
-function Field({ label, ...p }: TextInputProps & { label: string }) {
+function Field({ label, square, ...p }: TextInputProps & { label: string; square?: boolean }) {
   return (
     <View style={{ gap: 6 }}>
       <Label>{label}</Label>
-      <TextInput placeholderTextColor={color.faint} accessibilityLabel={label} {...p} style={[field, p.multiline && { height: 120, paddingTop: 14, borderRadius: 24, textAlignVertical: "top" }]} />
+      <TextInput placeholderTextColor={color.faint} accessibilityLabel={label} {...p} style={[field, square && { borderRadius: 14, backgroundColor: "#161616", borderColor: "#262626" }, p.multiline && { height: 140, paddingTop: 14, borderRadius: square ? 14 : 24, textAlignVertical: "top" }]} />
     </View>
   );
 }
@@ -18,14 +18,14 @@ function Field({ label, ...p }: TextInputProps & { label: string }) {
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const reason = (e: unknown) => (e instanceof ApiError && e.status === 429 ? "Too many requests from this connection. Please try again later." : e instanceof ApiError ? e.message : "Something went wrong. Please try again.");
 
-/** Private booking enquiry, the same as the website's. */
+/** Private booking enquiry, laid out as the website's card. */
 export function EnquiryForm() {
   const [v, set] = useState({ name: "", email: "", phone: "", date: "", guests: "", message: "" });
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const up = (k: keyof typeof v) => (t: string) => setV(k, t);
   const setV = (k: keyof typeof v, t: string) => set((s) => ({ ...s, [k]: t }));
+  const up = (k: keyof typeof v) => (t: string) => setV(k, t);
 
   async function submit() {
     if (!v.name.trim()) return setErr("Tell us your name.");
@@ -39,19 +39,31 @@ export function EnquiryForm() {
     } catch (e) { setErr(reason(e)); } finally { setBusy(false); }
   }
 
-  if (done) return <Body style={{ color: color.good }}>Thank you. We have your enquiry and will reply by email soon.</Body>;
-  return (
-    <View style={{ gap: 12 }}>
-      <Field label="Your name" value={v.name} onChangeText={up("name")} autoComplete="name" maxLength={120} placeholder="Priya Nair" />
-      <Field label="Email" value={v.email} onChangeText={up("email")} keyboardType="email-address" autoCapitalize="none" autoComplete="email" placeholder="you@example.com" />
-      <Field label="Phone (optional)" value={v.phone} onChangeText={up("phone")} keyboardType="phone-pad" maxLength={30} placeholder="+91" />
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <View style={{ flex: 1 }}><Field label="Date (optional)" value={v.date} onChangeText={up("date")} placeholder="YYYY-MM-DD" maxLength={10} /></View>
-        <View style={{ flex: 1 }}><Field label="Guests (optional)" value={v.guests} onChangeText={(t) => setV("guests", t.replace(/\D/g, ""))} keyboardType="number-pad" maxLength={4} placeholder="40" /></View>
+  const card = { padding: 22, borderRadius: 28, borderWidth: 1, borderColor: color.line, backgroundColor: "#0e0e0e", gap: 16 } as const;
+  if (done) {
+    return (
+      <View style={card}>
+        <H2>Thank you</H2>
+        <Body>We have your enquiry and will reply by email soon.</Body>
       </View>
-      <Field label="What are you planning?" value={v.message} onChangeText={up("message")} multiline maxLength={2000} placeholder="A private listening evening for 40 guests…" />
+    );
+  }
+  return (
+    <View accessibilityLabel="Private booking enquiry" style={card}>
+      <View style={{ gap: 10 }}>
+        <Text style={{ fontFamily: font.serif, fontSize: 30, lineHeight: 34, color: color.white }}>Tell us about your evening</Text>
+        <Body style={{ fontSize: 15, lineHeight: 24 }}>Share the date, the number of guests and what you have in mind. We reply by email.</Body>
+      </View>
+      <Field square label="Your name" value={v.name} onChangeText={up("name")} autoComplete="name" maxLength={120} placeholder="Priya Nair" />
+      <Field square label="Email" value={v.email} onChangeText={up("email")} keyboardType="email-address" autoCapitalize="none" autoComplete="email" placeholder="you@example.com" />
+      <Field square label="Phone  (optional)" value={v.phone} onChangeText={up("phone")} keyboardType="phone-pad" maxLength={30} placeholder="+91" />
+      <View style={{ flexDirection: "row", gap: 12 }}>
+        <View style={{ flex: 1 }}><Field square label="Date  (optional)" value={v.date} onChangeText={up("date")} placeholder="YYYY-MM-DD" maxLength={10} /></View>
+        <View style={{ flex: 1 }}><Field square label="Guests  (optional)" value={v.guests} onChangeText={(t) => setV("guests", t.replace(/\D/g, ""))} keyboardType="number-pad" maxLength={4} placeholder="40" /></View>
+      </View>
+      <Field square label="What are you planning?" value={v.message} onChangeText={up("message")} multiline maxLength={2000} placeholder="A private listening evening for 40 guests…" />
       <ErrorLine message={err} />
-      <PillButton label="Send enquiry" onPress={submit} busy={busy} />
+      <PillButton label={busy ? "Sending…" : "Send enquiry"} onPress={submit} busy={busy} />
     </View>
   );
 }

@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EventCard } from "@/components/EventCard";
 import { EnquiryForm, NewsletterSignup } from "@/components/Forms";
 import { Photo } from "@/components/Photo";
@@ -16,7 +16,7 @@ import { useUnread } from "@/lib/useUnread";
 import { color, font } from "@/theme";
 
 const Section = ({ title, action, children }: { title: string; action?: { label: string; onPress: () => void }; children: React.ReactNode }) => (
-  <View style={{ marginTop: 40, gap: 16 }}>
+  <View style={{ marginTop: 32, gap: 16 }}>
     <View style={{ paddingHorizontal: 20, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
       <H2>{title}</H2>
       {action && <Pressable onPress={action.onPress} accessibilityRole="link" hitSlop={8}><Text style={{ fontFamily: font.sansMedium, color: color.white, textDecorationLine: "underline" }}>{action.label}</Text></Pressable>}
@@ -30,13 +30,14 @@ export default function Home() {
   const { artists, archive } = useHomeExtras(events);
   const router = useRouter();
   const unread = useUnread();
+  const top = useSafeAreaInsets().top;
   const hero = events?.find((e) => e.is_featured) ?? events?.[0];
   const go = (slug: string) => router.push({ pathname: "/event/[slug]", params: { slug } });
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["top"]}>
+    <View style={{ flex: 1, backgroundColor: color.bg }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={color.white} />}>
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <View style={{ height: 60 + top, paddingHorizontal: 20, paddingTop: top + 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 2 }}>
           <Text style={{ fontFamily: font.serif, fontSize: 30, color: color.white, letterSpacing: 6 }}>jive</Text>
           <Pressable onPress={() => router.push("/notifications")} accessibilityRole="button" accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"} hitSlop={10}>
             <Ionicons name="notifications-outline" size={26} color={color.white} />
@@ -55,14 +56,15 @@ export default function Home() {
           </View>
         )}
         {hero && (
-          <View style={{ height: 560, justifyContent: "flex-end", overflow: "hidden", backgroundColor: color.surface }}>
+          <View style={{ height: 620 + top, marginTop: -(60 + top), justifyContent: "flex-end", overflow: "hidden", backgroundColor: color.surface }}>
             <Photo source={eventImage(hero, "banner")} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} transition={250} />
             {/* The website's banner fade: the photo shows through, darker towards the bottom. */}
-            <LinearGradient pointerEvents="none" colors={["rgba(0,0,0,0.12)", "rgba(0,0,0,0.38)", "rgba(10,10,10,0.92)", "#0a0a0a"]} locations={[0, 0.45, 0.82, 1]} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} />
-            <View style={{ padding: 20, paddingBottom: 28, gap: 8 }}>
+            <LinearGradient pointerEvents="none" colors={["rgba(0,0,0,0.6)", "rgba(0,0,0,0.12)", "rgba(0,0,0,0.5)", "rgba(10,10,10,0.9)", "#0a0a0a"]} locations={[0, 0.16, 0.5, 0.8, 1]} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} />
+            <View style={{ padding: 20, paddingBottom: 20, gap: 8 }}>
               <H1 style={{ fontSize: 40, lineHeight: 42 }}>{hero.title}</H1>
               {!!hero.subtitle && <Body numberOfLines={2}>{hero.subtitle}</Body>}
-              <Body style={{ color: color.text }}>{dayMonth(hero.starts_at, hero.timezone)} · {timeOf(hero.starts_at, hero.timezone)}  ·  {hero.venue_name}, {hero.city}</Body>
+              <Body style={{ color: color.text }}>{dayMonth(hero.starts_at, hero.timezone)} · {timeOf(hero.starts_at, hero.timezone)}</Body>
+              <Body numberOfLines={1}>{hero.venue_name}, {hero.city}</Body>
               <PillButton label={hero.starting_price_paise ? `Get tickets · from ${inr(hero.starting_price_paise)}` : "Get tickets"} onPress={() => go(hero.slug)} style={{ marginTop: 8 }} />
               {events && events.length > 1 && <PillButton label="See all nights" tone="ghost" arrow={false} onPress={() => router.push("/events")} />}
             </View>
@@ -96,20 +98,22 @@ export default function Home() {
             )} />
         </Section>
 
-        <View style={{ marginTop: 40, paddingHorizontal: 20, gap: 14 }}>
+        <View style={{ marginTop: 48, paddingHorizontal: 20, gap: 16 }}>
           <H2>Private bookings</H2>
           <Body>Our rooms are available for private listening sessions, brand showcases and table reservations.</Body>
-          {PRIVATE_SERVICES.map((s) => (
-            <View key={s.name} style={{ padding: 16, borderRadius: 20, backgroundColor: color.surface, borderWidth: 1, borderColor: color.line, gap: 4 }}>
-              <Text style={{ fontFamily: font.sansBold, fontSize: 16, color: color.white }}>{s.name}</Text>
-              <Body style={{ fontSize: 14 }}>{s.note}</Body>
-            </View>
-          ))}
-          <View style={{ marginTop: 8 }}><EnquiryForm /></View>
+          <View style={{ gap: 14, marginTop: 8 }}>
+            {PRIVATE_SERVICES.map((s) => (
+              <View key={s.name} style={{ padding: 24, borderRadius: 24, backgroundColor: color.surface, borderWidth: 1, borderColor: color.line, gap: 12 }}>
+                <Text style={{ fontFamily: font.serif, fontSize: 24, lineHeight: 29, color: color.white }}>{s.name}</Text>
+                <Body style={{ fontSize: 15, lineHeight: 24 }}>{s.note}</Body>
+              </View>
+            ))}
+          </View>
+          <View style={{ marginTop: 16 }}><EnquiryForm /></View>
         </View>
 
         <View style={{ marginTop: 48, paddingHorizontal: 20 }}><NewsletterSignup /></View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

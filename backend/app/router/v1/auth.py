@@ -13,12 +13,15 @@ Rate limited fail-closed; the limits live in `app/dependencies.py`.
 from __future__ import annotations
 
 from typing import Annotated
+from urllib.parse import urlencode
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Query, status
+from fastapi.responses import RedirectResponse
 
 from app.core import mailer
 from app.core.config import Environment
+from app.core.errors import BusinessRuleError
 from app.dependencies import (
     AppSettings,
     AuthServiceDep,
@@ -59,6 +62,10 @@ async def google_authorize(
         str | None,
         Query(description="Overrides the configured redirect URI; must be registered"),
     ] = None,
+    app_redirect: Annotated[
+        str | None,
+        Query(description="The phone app's own link, to hand the sign-in back to", max_length=300),
+    ] = None,
 ) -> GoogleAuthorizationResponse:
     """Return the URL to send the user to.
 
@@ -66,10 +73,33 @@ async def google_authorize(
     one-time `state` and a PKCE challenge are generated here and held
     server-side, so the callback cannot be forged or replayed.
     """
-    request = await service.start_google_sign_in(redirect_uri)
+    request = await service.start_google_sign_in(redirect_uri, app_redirect)
     return GoogleAuthorizationResponse(
         authorization_url=request.authorization_url, state=request.state
     )
+
+
+@router.get("/google/mobile-return", include_in_schema=False)
+async def google_mobile_return(
+    service: AuthServiceDep,
+    code: Annotated[str | None, Query(max_length=2000)] = None,
+    state: Annotated[str | None, Query(max_length=200)] = None,
+    error: Annotated[str | None, Query(max_length=200)] = None,
+) -> RedirectResponse:
+    """Where Google sends the person back for the phone app: on to the app's own link.
+
+    Nothing is signed in here. The app takes the code and state and finishes through
+    `POST /google/callback`, exactly as the website does.
+    """
+    target = await service.app_return_url(state) if state else None
+    if target is None:
+        raise BusinessRuleError(
+            "This sign-in link has expired. Please try again.", code="OAUTH_STATE_INVALID"
+        )
+    query = urlencode(
+        {k: v for k, v in {"code": code, "state": state, "error": error}.items() if v}
+    )
+    return RedirectResponse(f"{target}{'&' if '?' in target else '?'}{query}", status_code=302)
 
 
 @router.post(

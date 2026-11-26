@@ -36,6 +36,48 @@ async def test_authorize_returns_a_google_url_and_state(api: AsyncClient) -> Non
     assert len(body["state"]) >= 20
 
 
+async def test_the_phone_app_gets_its_code_handed_back_through_the_api(api: AsyncClient) -> None:
+    mine = "exp://192.168.1.5:8081/--/auth/google"
+    started = await api.get("/api/v1/auth/google/authorize", params={"app_redirect": mine})
+    assert started.status_code == 200, started.text
+    state = started.json()["state"]
+
+    back = await api.get(
+        "/api/v1/auth/google/mobile-return",
+        params={"code": "abc", "state": state},
+        follow_redirects=False,
+    )
+    assert back.status_code == 302
+    assert back.headers["location"] == f"{mine}?code=abc&state={state}"
+    # Looking is not consuming: the app can still finish the sign-in with this state.
+    again = await api.get(
+        "/api/v1/auth/google/mobile-return",
+        params={"code": "abc", "state": state},
+        follow_redirects=False,
+    )
+    assert again.status_code == 302
+
+
+async def test_the_return_hop_never_sends_a_code_to_a_web_page(api: AsyncClient) -> None:
+    web = await api.get(
+        "/api/v1/auth/google/authorize", params={"app_redirect": "https://evil.example/x"}
+    )
+    assert web.status_code == 422 and web.json()["error"]["code"] == "BAD_APP_REDIRECT"
+
+    plain = await api.get("/api/v1/auth/google/authorize")  # the website's flow stores no app link
+    unknown = await api.get(
+        "/api/v1/auth/google/mobile-return",
+        params={"code": "c", "state": "nope"},
+        follow_redirects=False,
+    )
+    no_link = await api.get(
+        "/api/v1/auth/google/mobile-return",
+        params={"code": "c", "state": plain.json()["state"]},
+        follow_redirects=False,
+    )
+    assert unknown.status_code == 422 and no_link.status_code == 422
+
+
 async def test_first_sign_in_creates_the_customer(api: AsyncClient, customer_email: str) -> None:
     result = await sign_in_with_google(api)
     response = result["response"]
