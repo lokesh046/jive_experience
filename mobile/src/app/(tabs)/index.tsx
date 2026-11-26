@@ -5,11 +5,13 @@ import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "rea
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EventCard } from "@/components/EventCard";
 import { EnquiryForm, NewsletterSignup } from "@/components/Forms";
+import { EventDayBanner } from "@/components/EventDayBanner";
 import { Photo } from "@/components/Photo";
 import { Body, H1, H2, PillButton } from "@/components/ui";
 import { PRIVATE_SERVICES } from "@/lib/content";
 import { dayMonth, inr, timeOf } from "@/lib/format";
 import { eventImage } from "@/lib/images";
+import { useEventDay } from "@/lib/useEventDay";
 import { useEvents } from "@/lib/useEvents";
 import { useHomeExtras } from "@/lib/useHome";
 import { useUnread } from "@/lib/useUnread";
@@ -31,19 +33,22 @@ export default function Home() {
   const router = useRouter();
   const unread = useUnread();
   const top = useSafeAreaInsets().top;
+  const day = useEventDay();
   const hero = events?.find((e) => e.is_featured) ?? events?.[0];
   const go = (slug: string) => router.push({ pathname: "/event/[slug]", params: { slug } });
 
   return (
     <View style={{ flex: 1, backgroundColor: color.bg }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={color.white} />}>
-        <View style={{ height: 60 + top, paddingHorizontal: 20, paddingTop: top + 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 2 }}>
+        <View style={{ height: 60 + top, paddingHorizontal: 20, paddingTop: top + 8, marginBottom: day ? 8 : 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 2 }}>
           <Text style={{ fontFamily: font.serif, fontSize: 30, color: color.white, letterSpacing: 6 }}>jive</Text>
           <Pressable onPress={() => router.push("/notifications")} accessibilityRole="button" accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"} hitSlop={10}>
             <Ionicons name="notifications-outline" size={26} color={color.white} />
             {unread > 0 && <View style={{ position: "absolute", top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: color.amber }} />}
           </Pressable>
         </View>
+
+        {day && <EventDayBanner day={day} />}
 
         {error && !events && <Body style={{ paddingHorizontal: 20 }}>{error} Pull down to try again.</Body>}
         {!events && !error && <View style={{ marginHorizontal: 20, height: 420, borderRadius: 28, backgroundColor: color.surface }} />}
@@ -56,7 +61,7 @@ export default function Home() {
           </View>
         )}
         {hero && (
-          <View style={{ height: 620 + top, marginTop: -(60 + top), justifyContent: "flex-end", overflow: "hidden", backgroundColor: color.surface }}>
+          <View style={{ height: 620 + (day ? 0 : top), marginTop: day ? 0 : -(60 + top), justifyContent: "flex-end", overflow: "hidden", backgroundColor: color.surface }}>
             <Photo source={eventImage(hero, "banner")} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} transition={250} />
             {/* The website's banner fade: the photo shows through, darker towards the bottom. */}
             <LinearGradient pointerEvents="none" colors={["rgba(0,0,0,0.6)", "rgba(0,0,0,0.12)", "rgba(0,0,0,0.5)", "rgba(10,10,10,0.9)", "#0a0a0a"]} locations={[0, 0.16, 0.5, 0.8, 1]} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} />

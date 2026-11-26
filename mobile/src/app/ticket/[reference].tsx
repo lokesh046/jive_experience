@@ -7,9 +7,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Body, Chip, ErrorLine, H1, Label, PillButton } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { eventsById } from "@/lib/eventsIndex";
+import { addToCalendar, openDirections } from "@/lib/deviceActions";
+import { isOffline, loadBundle, saveBundle } from "@/lib/offline";
 import { inr, longDate, timeOf } from "@/lib/format";
+import { addressOf } from "@/lib/maps";
 import { STATUS_LABEL, statusTone } from "@/lib/status";
-import type { Booking, EventDetail, EventListItem, RefundQuote, Ticket } from "@/lib/types";
+import type { Booking, EventDetail, EventListItem, RefundQuote, Ticket, Venue } from "@/lib/types";
 import { color, font } from "@/theme";
 
 const CREAM = "#f3e9d2";
@@ -23,6 +26,8 @@ export default function TicketScreen() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [event, setEvent] = useState<EventListItem | null>(null);
   const [prices, setPrices] = useState<number[]>([]);
+  const [venue, setVenue] = useState<Venue | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);   // set when this is the copy kept on the phone
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,17 +49,35 @@ export default function TicketScreen() {
       try {
         const booking = await api<Booking>(`bookings/${reference}`);
         if (!live) return;
-        setB(booking);
+        setB(booking); setSavedAt(null);
         const [t, ev] = await Promise.all([
           api<Ticket[] | { items: Ticket[] }>(`bookings/${reference}/tickets`).catch(() => []),
           eventsById(),
         ]);
         if (!live) return;
-        setTickets(Array.isArray(t) ? t : t.items);
+        const list = Array.isArray(t) ? t : t.items;
+        setTickets(list);
         const found = ev.get(booking.event_id) ?? null;
         setEvent(found);
-        if (found) api<EventDetail>(`events/${found.slug}`).then((d) => live && setPrices(d.ticket_categories.map((c) => c.price_paise))).catch(() => {});
-      } catch (e) { if (live) setError(e instanceof ApiError ? e.message : "We could not load this booking."); }
+        let v: Venue | null = null; let pr: number[] = [];
+        if (found) {
+          try {
+            const d = await api<EventDetail>(`events/${found.slug}`);
+            v = d.venue; pr = d.ticket_categories.map((c) => c.price_paise);
+            if (live) { setVenue(v); setPrices(pr); }
+          } catch {}
+        }
+        // Keep a copy on the phone so the QR opens with no signal.
+        if (list.length > 0) void saveBundle({ reference, booking, tickets: list, event: found, venue: v, prices: pr });
+      } catch (e) {
+        if (!live) return;
+        const saved = isOffline(e) ? await loadBundle(reference) : null;
+        if (saved) {
+          setB(saved.booking); setTickets(saved.tickets); setEvent(saved.event); setVenue(saved.venue); setPrices(saved.prices); setSavedAt(saved.savedAt);
+          return;
+        }
+        setError(e instanceof ApiError ? e.message : "We could not load this booking.");
+      }
     })();
     return () => { live = false; };
   }, [reference]);
@@ -133,6 +156,11 @@ export default function TicketScreen() {
               {tickets.map((t, i) => <View key={t.id} style={{ width: i === page ? 20 : 6, height: 6, borderRadius: 3, backgroundColor: i === page ? color.white : color.line }} />)}
             </View>
           )}
+          {savedAt !== null && (
+            <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: color.surface, borderWidth: 1, borderColor: color.line }}>
+              <Text style={{ fontFamily: font.sansMedium, fontSize: 13, color: color.amber }}>No signal. Showing the tickets saved on this phone.</Text>
+            </View>
+          )}
           {event && <H1 style={{ fontSize: 28, lineHeight: 32 }}>{event.title}</H1>}
           {event && <Body style={{ color: color.text }}>{longDate(event.starts_at, event.timezone)}, {timeOf(event.starts_at, event.timezone)}</Body>}
           {event && <Body style={{ fontSize: 14 }}>{event.venue_name}, {event.city}</Body>}
@@ -141,7 +169,15 @@ export default function TicketScreen() {
             <Label>{b.reference} · {inr(b.total_paise)}</Label>
           </View>
           <ErrorLine message={error} />
-          {live && upcoming && <PillButton label="Cancel booking" tone="ghost" arrow={false} busy={busy} onPress={askCancel} style={{ marginTop: 8 }} />}
+          {event && upcoming && (
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
+              <PillButton label="Directions" tone="ghost" arrow={false} style={{ flex: 1 }}
+                onPress={() => openDirections({ name: venue?.name ?? event.venue_name, latitude: venue?.latitude, longitude: venue?.longitude, address: venue ? addressOf(venue) : `${event.venue_name}, ${event.city}` })} />
+              <PillButton label="Add to calendar" tone="ghost" arrow={false} style={{ flex: 1 }}
+                onPress={() => addToCalendar({ title: event.title, subtitle: event.subtitle, starts_at: event.starts_at, where: venue ? addressOf(venue) : `${event.venue_name}, ${event.city}` })} />
+            </View>
+          )}
+          {live && upcoming && savedAt === null && <PillButton label="Cancel booking" tone="ghost" arrow={false} busy={busy} onPress={askCancel} style={{ marginTop: 8 }} />}
         </View>
       )}
       </ScrollView>

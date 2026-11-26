@@ -12,7 +12,7 @@ import { TicketPreview } from "@/components/TicketPreview";
 import { Body, Chip, ErrorLine, H1, H2, Label, PillButton } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { BOOKING_MESSAGES, idempotencyKey } from "@/lib/booking";
-import { googleCalendarUrl } from "@/lib/calendar";
+import { addToCalendar, openDirections } from "@/lib/deviceActions";
 import { dayMonth, inr, longDate, timeOf } from "@/lib/format";
 import { addressOf, embedUrl, isWebLink, mapQuery, searchUrl } from "@/lib/maps";
 import { describePolicy } from "@/lib/policy";
@@ -96,7 +96,7 @@ export default function EventScreen() {
                 />
                 {!e.is_past && (
                   <PillButton label="Add to calendar" tone="ghost" arrow={false}
-                    onPress={() => Linking.openURL(googleCalendarUrl({ title: e.title, subtitle: e.subtitle, starts_at: e.starts_at, ends_at: e.ends_at, where: addressOf(v), url: `${SITE_URL}/events/${e.slug}` })).catch(() => {})} />
+                    onPress={() => addToCalendar({ title: e.title, subtitle: e.subtitle, starts_at: e.starts_at, ends_at: e.ends_at, where: addressOf(v), url: `${SITE_URL}/events/${e.slug}` })} />
                 )}
               </View>
 
@@ -175,7 +175,7 @@ export default function EventScreen() {
                   {!!(v.address_line1 || v.address_line2) && <Body style={{ fontSize: 14 }}>{[v.address_line1, v.address_line2].filter(Boolean).join(", ")}</Body>}
                   <Body style={{ fontSize: 14 }}>{[v.city, v.state, v.postal_code].filter(Boolean).join(", ")}</Body>
                 </View>
-                <PillButton label="Open in Maps" tone="ghost" onPress={() => Linking.openURL(link ?? searchUrl(query)).catch(() => {})} />
+                <PillButton label="Get directions" tone="ghost" onPress={() => openDirections({ name: v.name, latitude: v.latitude, longitude: v.longitude, address: addressOf(v) })} />
               </View>
 
               <View style={{ gap: 10 }}>

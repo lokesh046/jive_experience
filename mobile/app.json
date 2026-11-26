@@ -39,6 +39,12 @@
           "cameraPermission": "JIVE uses the camera to scan tickets at the gate.",
           "recordAudioAndroid": false
         }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "JIVE adds the night you booked to your calendar."
+        }
       ]
     ],
     "experiments": {

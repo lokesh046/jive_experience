@@ -1,6 +1,7 @@
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { clearOffline, loadUser, saveUser } from "./offline";
 import { disablePush } from "./push";
 import { API_V1 } from "./config";
 import { api, clearTokens, loadTokens, refreshOnce, refreshToken, saveTokens, setSignedOutHandler } from "./api";
@@ -33,8 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await loadTokens();
       // Who we are comes back with a fresh pair. A refused token signs out; no network does not.
       const r = await refreshOnce();
-      if (typeof r === "object") { setUser(r.user); setStatus("signedIn"); return; }
-      if (r === "rejected") await clearTokens();
+      if (typeof r === "object") { setUser(r.user); setStatus("signedIn"); void saveUser(r.user); return; }
+      if (r === "offline") {
+        // No signal at launch is not a reason to sign out: open with who was signed in, and the saved tickets.
+        const saved = await loadUser();
+        if (saved) { setUser(saved); setStatus("signedIn"); return; }
+      }
+      if (r === "rejected") { await clearTokens(); await clearOffline(); }
       drop();
     })();
   }, [drop]);
@@ -46,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyCode = useCallback(async (email: string, code: string) => {
     const pair = await api<TokenPair>("auth/email/verify", { method: "POST", json: { email, code } });
     await saveTokens(pair);
+    void saveUser(pair.user);
     setUser(pair.user);
     setStatus("signedIn");
   }, []);
@@ -63,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (q.error || typeof q.code !== "string" || typeof q.state !== "string") throw new Error("Google did not sign you in. Please try again.");
     const pair = await api<TokenPair>("auth/google/callback", { method: "POST", json: { code: q.code, state: q.state } });
     await saveTokens(pair);
+    void saveUser(pair.user);
     setUser(pair.user);
     setStatus("signedIn");
     return true;
@@ -73,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const rt = await refreshToken();
     if (rt) { try { await api("auth/logout", { method: "POST", json: { refresh_token: rt } }); } catch {} }
     await clearTokens();
+    await clearOffline();   // saved tickets belong to the person who just left
     drop();
   }, [drop]);
 

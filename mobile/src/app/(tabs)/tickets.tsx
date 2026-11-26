@@ -4,11 +4,10 @@ import { useCallback, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Body, Chip, H1 } from "@/components/ui";
-import { api } from "@/lib/api";
-import { eventsById } from "@/lib/eventsIndex";
+import { loadMyBookings, prefetchTickets } from "@/lib/offline";
 import { dayMonth, inr } from "@/lib/format";
 import { STATUS_LABEL, statusTone } from "@/lib/status";
-import type { Booking, EventListItem, Page } from "@/lib/types";
+import type { Booking, EventListItem } from "@/lib/types";
 import { color, font } from "@/theme";
 
 export default function Tickets() {
@@ -18,12 +17,19 @@ export default function Tickets() {
   const [tab, setTab] = useState<"up" | "past">("up");
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);   // set when showing the copy kept on the phone
 
   const load = useCallback(async (force = false) => {
     try {
-      const [b, ev] = await Promise.all([api<Page<Booking>>("bookings?size=50"), eventsById(force)]);
-      setRows(b.items); setEvents(ev); setError(null);
-    } catch (e: any) { setError(e?.message ?? "We could not load your bookings."); }
+      const r = await loadMyBookings(force);
+      setRows(r.bookings); setEvents(r.events); setError(null);
+      setSavedAt(r.offline ? r.savedAt ?? Date.now() : null);
+      // Keep the tickets of upcoming bookings on the phone, so the QR opens with no signal.
+      if (!r.offline) void prefetchTickets(r.bookings, r.events);
+    } catch (e: any) {
+      // Staff and admin accounts do not buy tickets; the server says so with a 403.
+      setError(e?.code === "PERMISSION_DENIED" ? "Tickets are for customer accounts. Use the Scan tab to check people in or sell at the counter." : e?.message ?? "We could not load your bookings.");
+    }
   }, []);
 
   // Reload whenever the tab is shown, so a booking just paid for appears.
@@ -52,6 +58,11 @@ export default function Tickets() {
         ListHeaderComponent={
           <View style={{ gap: 16, marginBottom: 4 }}>
             <H1>My tickets</H1>
+            {savedAt !== null && (
+              <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 14, backgroundColor: color.surface, borderWidth: 1, borderColor: color.line }}>
+                <Text style={{ fontFamily: font.sansMedium, fontSize: 13, color: color.amber }}>No signal. Showing the tickets saved on this phone.</Text>
+              </View>
+            )}
             <View accessibilityRole="tablist" style={{ flexDirection: "row", padding: 4, borderRadius: 999, backgroundColor: color.surface, borderWidth: 1, borderColor: color.line }}>
               {(["up", "past"] as const).map((t) => (
                 <Pressable key={t} accessibilityRole="tab" accessibilityState={{ selected: tab === t }} onPress={() => setTab(t)}
