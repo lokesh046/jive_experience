@@ -1,7 +1,7 @@
 import type React from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Body, ErrorLine, H1 } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
@@ -52,7 +52,7 @@ export default function Code() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: 24, gap: 20, flexGrow: 1, justifyContent: "center" }} keyboardShouldPersistTaps="handled">
           <H1>Check your email</H1>
           <Body>We sent a code to <Text style={{ color: color.white }}>{email}</Text>. It lasts 10 minutes.</Body>

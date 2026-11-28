@@ -70,7 +70,7 @@ export default function Home() {
               {!!hero.subtitle && <Body numberOfLines={2}>{hero.subtitle}</Body>}
               <Body style={{ color: color.text }}>{dayMonth(hero.starts_at, hero.timezone)} · {timeOf(hero.starts_at, hero.timezone)}</Body>
               <Body numberOfLines={1}>{hero.venue_name}, {hero.city}</Body>
-              <PillButton label={hero.starting_price_paise ? `Get tickets · from ${inr(hero.starting_price_paise)}` : "Get tickets"} onPress={() => go(hero.slug)} style={{ marginTop: 8 }} />
+              <PillButton label={hero.starting_price_paise ? `Get tickets · from ${inr(hero.starting_price_paise)}` : "Get tickets"} onPress={() => router.push({ pathname: "/event/[slug]", params: { slug: hero.slug, section: "tickets" } })} style={{ marginTop: 8 }} />
               {events && events.length > 1 && <PillButton label="See all nights" tone="ghost" arrow={false} onPress={() => router.push("/events")} />}
             </View>
           </View>

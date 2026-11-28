@@ -15,6 +15,8 @@ interface Ctx {
   verifyCode: (email: string, code: string) => Promise<void>;
   /** Resolves false when the person closed the Google window. */
   googleSignIn: () => Promise<boolean>;
+  /** Replace the signed-in person's details after they change them (their name, for instance). */
+  updateUser: (u: AuthUser) => void;
   signOut: () => Promise<void>;
 }
 
@@ -76,6 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }, []);
 
+  const updateUser = useCallback((u: AuthUser) => { setUser(u); void saveUser(u); }, []);
+
   const signOut = useCallback(async () => {
     await disablePush();   // this phone stops getting this person's notifications
     const rt = await refreshToken();
@@ -85,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     drop();
   }, [drop]);
 
-  const value = useMemo(() => ({ status, user, requestCode, verifyCode, googleSignIn, signOut }), [status, user, requestCode, verifyCode, googleSignIn, signOut]);
+  const value = useMemo(() => ({ status, user, requestCode, verifyCode, googleSignIn, updateUser, signOut }), [status, user, requestCode, verifyCode, googleSignIn, updateUser, signOut]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

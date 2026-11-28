@@ -30,7 +30,7 @@ export function PillButton({ label, onPress, busy, disabled, arrow = true, tone 
       disabled={off}
       onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
       style={({ pressed }) => [{
-        height: 56, borderRadius: 28, paddingLeft: 24, paddingRight: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        height: 56, borderRadius: 28, paddingLeft: arrow ? 24 : 24, paddingRight: arrow ? 6 : 24, flexDirection: "row", alignItems: "center", justifyContent: arrow ? "space-between" : "center",
         backgroundColor: solid ? color.white : "transparent", borderWidth: solid ? 0 : 1, borderColor: color.line, opacity: off ? 0.5 : pressed ? 0.85 : 1,
       }, style]}
     >
@@ -39,7 +39,7 @@ export function PillButton({ label, onPress, busy, disabled, arrow = true, tone 
         <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: solid ? color.ink : color.surfaceHigh, alignItems: "center", justifyContent: "center" }}>
           {busy ? <ActivityIndicator color={color.white} /> : <Ionicons name="arrow-forward" size={20} color={color.white} />}
         </View>
-      ) : busy ? <ActivityIndicator color={solid ? color.ink : color.white} style={{ marginRight: 18 }} /> : <View style={{ width: 18 }} />}
+      ) : busy ? <ActivityIndicator color={solid ? color.ink : color.white} style={{ marginLeft: 12 }} /> : null}
     </Pressable>
   );
 }

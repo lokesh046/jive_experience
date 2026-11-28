@@ -1,6 +1,6 @@
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Body, ErrorLine, H1, Label, PillButton } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -25,7 +25,7 @@ export default function Phone() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }}>
       <Stack.Screen options={{ headerShown: false, presentation: "modal" }} />
-      <KeyboardAvoidingView style={{ flex: 1, padding: 24, gap: 18, justifyContent: "center" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1, padding: 24, gap: 18, justifyContent: "center" }} behavior="padding">
         <H1>Your phone number</H1>
         <Body>We need it once, to keep ticket buying fair. It is only used for your bookings.</Body>
         <View style={{ gap: 8 }}>

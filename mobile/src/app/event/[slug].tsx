@@ -2,11 +2,12 @@ import type React from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import { useEffect, useRef, useState } from "react";
-import { FlatList, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { WaitlistForm } from "@/components/Forms";
 import { Photo } from "@/components/Photo";
+import { LoopCarousel } from "@/components/LoopCarousel";
 import { TicketPicker, usePicker } from "@/components/TicketPicker";
 import { TicketPreview } from "@/components/TicketPreview";
 import { Body, Chip, ErrorLine, H1, H2, Label, PillButton } from "@/components/ui";
@@ -23,12 +24,13 @@ import type { Booking, EventDetail } from "@/lib/types";
 import { color, font } from "@/theme";
 
 export default function EventScreen() {
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { slug, section } = useLocalSearchParams<{ slug: string; section?: string }>();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [ticketsY, setTicketsY] = useState(0);
   const [bodyY, setBodyY] = useState(0);
+  const [photoAt, setPhotoAt] = useState(0);
   const [e, setE] = useState<EventDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const p = usePicker(e);
@@ -36,6 +38,14 @@ export default function EventScreen() {
   const [bookError, setBookError] = useState<string | null>(null);
   const cancelled = e?.status === "CANCELLED";
   const sellable = !!e && e.on_sale && !e.is_past && !cancelled;
+
+  // Arriving from a "Get tickets" button: land on the tickets once the page has been laid out.
+  const jumped = useRef(false);
+  useEffect(() => {
+    if (section !== "tickets" || jumped.current || !e || !ticketsY) return;
+    jumped.current = true;
+    scroll.current?.scrollTo({ y: Math.max(0, bodyY + ticketsY - 12), animated: false });
+  }, [section, e, ticketsY, bodyY]);
 
   useEffect(() => {
     api<EventDetail>(`events/${slug}`).then(setE).catch((x) => setError(x?.message ?? "Could not load this event."));
@@ -76,10 +86,20 @@ export default function EventScreen() {
         {error && <Body style={{ padding: 20, paddingTop: 100 }}>{error}</Body>}
         {e && v && (
           <>
-            {/* Photos: swipe through the banner and gallery. */}
-            <FlatList horizontal pagingEnabled showsHorizontalScrollIndicator={false} data={photos} keyExtractor={(u) => u}
-              renderItem={({ item }) => <Photo source={item} style={{ width, height: 340 }} />} />
-            {photos.length > 1 && <Body style={{ fontSize: 12, textAlign: "center", marginTop: 8 }}>Swipe for more photos · {photos.length}</Body>}
+            {/* Photos: swipe through the banner and gallery, round and round. */}
+            <LoopCarousel
+              data={photos}
+              itemWidth={width}
+              keyOf={(u) => u}
+              onIndexChange={setPhotoAt}
+              autoPlayMs={4000}
+              renderItem={(u) => <Photo source={u} style={{ width, height: 340 }} />}
+            />
+            {photos.length > 1 && (
+              <View accessibilityLabel={`Photo ${photoAt + 1} of ${photos.length}`} style={{ flexDirection: "row", gap: 6, justifyContent: "center", marginTop: 12 }}>
+                {photos.map((u, i) => <View key={u} style={{ width: i === photoAt ? 20 : 6, height: 6, borderRadius: 3, backgroundColor: i === photoAt ? color.white : color.line }} />)}
+              </View>
+            )}
 
             <View onLayout={(ev) => setBodyY(ev.nativeEvent.layout.y)} style={{ padding: 20, gap: 10 }}>
               {e.is_past && !cancelled && <Chip label="Past event" />}
@@ -154,8 +174,16 @@ export default function EventScreen() {
                 {(v.description ?? "").split(/\n{2,}/).map((t) => t.trim()).filter(Boolean).map((t, i) => <Body key={i}>{t}</Body>)}
                 {!!v.directions && <Body>{v.directions}</Body>}
                 {(v.image_urls ?? []).length > 0 && (
-                  <FlatList horizontal data={v.image_urls} keyExtractor={(u) => u} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }} style={{ marginTop: 6 }}
-                    renderItem={({ item }) => <Photo source={item} style={{ width: 260, height: 180, borderRadius: 18 }} />} />
+                  <View style={{ marginTop: 6 }}>
+                    <LoopCarousel
+                      data={v.image_urls ?? []}
+                      itemWidth={260}
+                      gap={12}
+                      autoPlayMs={5000}
+                      keyOf={(u) => u}
+                      renderItem={(u) => <Photo source={u} style={{ width: 260, height: 180, borderRadius: 18, marginRight: 12 }} />}
+                    />
+                  </View>
                 )}
                 {(v.benefits ?? []).length > 0 && (
                   <View style={{ gap: 8, marginTop: 8 }}>

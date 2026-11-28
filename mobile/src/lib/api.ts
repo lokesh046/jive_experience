@@ -67,18 +67,19 @@ export function refreshOnce(): Promise<Refreshed> {
   return refreshing;
 }
 
-type Init = Omit<RequestInit, "body"> & { json?: unknown };
+type Init = Omit<RequestInit, "body"> & { json?: unknown; file?: { blob: Blob; contentType: string } };
 
 async function send(path: string, init: Init) {
-  const { json, headers, ...rest } = init;
+  const { json, file, headers, ...rest } = init;
   return fetch(`${API_V1}/${path.replace(/^\//, "")}`, {
     ...rest,
     headers: {
       ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(file ? { "Content-Type": file.contentType } : {}),
       ...(access ? { Authorization: `Bearer ${access}` } : {}),
       ...headers,
     },
-    body: json !== undefined ? JSON.stringify(json) : undefined,
+    body: file ? file.blob : json !== undefined ? JSON.stringify(json) : undefined,
   });
 }
 

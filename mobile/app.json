@@ -45,6 +45,13 @@
         {
           "calendarPermission": "JIVE adds the night you booked to your calendar."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "JIVE uses your photos so you can choose a profile picture.",
+          "cameraPermission": "JIVE uses the camera so you can take a profile picture."
+        }
       ]
     ],
     "experiments": {
