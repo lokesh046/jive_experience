@@ -120,6 +120,13 @@ class RefundService:
             )
         if event.starts_at <= now:
             return RefundQuote(False, 0, 0, "The event has already started.")
+        # A ticket that was scanned at the door has been used: there is nothing left to refund.
+        if any(
+            t.status is TicketStatus.CHECKED_IN for t in await self.tickets.for_booking(booking.id)
+        ):
+            return RefundQuote(
+                False, 0, 0, "A ticket from this booking has already been used at the door."
+            )
 
         policy = await self.effective_policy(event) or {}
         tiers = policy.get("tiers") if isinstance(policy, dict) else None

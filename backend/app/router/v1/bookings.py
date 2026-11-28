@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from urllib.parse import parse_qs
+
 from fastapi import APIRouter, Request, Response, status
+from fastapi.responses import HTMLResponse
 
 from app.core.errors import NotFoundError
 from app.core.pagination import Page
@@ -250,6 +254,42 @@ async def my_tickets(
 
 
 webhook_router = APIRouter(tags=["payments"])
+
+
+@webhook_router.post(
+    "/razorpay/return",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+async def razorpay_return(request: Request) -> HTMLResponse:
+    """Where Razorpay sends a phone's payment window back after netbanking, UPI or 3-D Secure.
+
+    Those methods leave the page and return by posting a form, so the result cannot arrive as a
+    script callback. This page hands what it got to the app and nothing else. It confirms
+    nothing: the app still calls the verify endpoint, which checks the signature and asks
+    Razorpay directly.
+    """
+    fields = {
+        k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8", "replace")).items()
+    }
+    paid = {
+        key: fields[key]
+        for key in ("razorpay_payment_id", "razorpay_order_id", "razorpay_signature")
+        if fields.get(key)
+    }
+    message = (
+        {"type": "success", "payload": paid}
+        if len(paid) == 3
+        else {"type": "failed", "payload": {"description": fields.get("error[description]", "")}}
+    )
+    data = json.dumps(message).replace("<", "\\u003c")
+    page = (
+        '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<body style="background:#0a0a0a;color:#a3a3a3;font-family:sans-serif;display:flex;'
+        'align-items:center;justify-content:center;height:100%"><p>Finishing up…</p>'
+        f"<script>window.ReactNativeWebView&&window.ReactNativeWebView.postMessage({json.dumps(data)})</script>"
+    )
+    return HTMLResponse(page)
 
 
 @webhook_router.post(

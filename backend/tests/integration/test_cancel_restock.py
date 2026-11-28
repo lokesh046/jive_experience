@@ -62,3 +62,33 @@ async def test_cancelling_a_confirmed_booking_returns_its_seats_to_sale(
     with pytest.raises(Exception, match="already cancelled"):
         await _cancel(db_session, settings, again, event, admin)
     assert await _sold(db_session, event_id) == 2
+
+
+async def test_a_booking_with_a_scanned_ticket_cannot_be_cancelled_by_the_customer(
+    db_session: AsyncSession, settings: Settings
+) -> None:
+    _customer, booking, event = await _confirmed_booking_with_tickets(db_session, 2)
+    booking_id, event_id = booking.id, event.id
+    await db_session.execute(
+        sa.text(
+            "UPDATE tickets SET status = 'CHECKED_IN', checked_in_at = now() "
+            "WHERE id = (SELECT id FROM tickets WHERE booking_id = :b LIMIT 1)"
+        ),
+        {"b": booking_id},
+    )
+    await db_session.commit()
+    db_session.expire_all()
+    booking = await db_session.get(Booking, booking_id)
+    event = await db_session.get(Event, event_id)
+    assert booking is not None and event is not None
+
+    service = RefundService(
+        session=db_session,
+        settings=settings,
+        provider=UnconfiguredPaymentProvider(),
+        outbox=OutboxService(db_session),
+    )
+    quote = await service.quote(booking=booking, event=event)
+
+    assert not quote.eligible
+    assert "already been used" in quote.reason
