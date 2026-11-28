@@ -1133,3 +1133,16 @@ select option { background: #111; }
 @media (min-width: 821px) { .msa { height: var(--msa-h-tablet); } }
 @media (min-width: 1200px) { .msa { height: var(--msa-h-desktop); } }
 @media (prefers-reduced-motion: reduce) { .msa-track, .msa-float { animation: none; } }
+
+/* The night: the description on the left, a drum kit drawn in light on the right. */
+.night { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; justify-content: center; align-items: center; }
+.night .prose { margin: 0 auto; width: 100%; }
+.night-art { position: relative; width: min(100%, 360px); margin: 0 auto; animation: night-draw 1.6s var(--ease) both, night-beat 2.4s ease-in-out 1.6s infinite; }
+.night-art img { display: block; width: 100%; height: auto; opacity: 0.82; }
+/* A band of light that runs along the drum lines: the same picture, masked by itself. */
+.night-art .shine { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 38%, #fff 50%, transparent 62%) 0 0 / 260% 100% no-repeat; -webkit-mask: url(/art/drums.png) center / 100% 100% no-repeat; mask: url(/art/drums.png) center / 100% 100% no-repeat; animation: night-shine 5s linear infinite; }
+@keyframes night-draw { from { clip-path: inset(0 100% 0 0); opacity: 0; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+@keyframes night-beat { 0%, 100% { transform: scale(1); } 12% { transform: scale(1.025); } 30% { transform: scale(1); } 50% { transform: scale(1.012); } 64% { transform: scale(1); } }
+@keyframes night-shine { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+@media (min-width: 900px) { .night { grid-template-columns: minmax(0, 680px) minmax(0, 400px); gap: 72px; } .night-art { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .night-art, .night-art .shine { animation: none; } .night-art .shine { display: none; } }

@@ -107,14 +107,18 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
 
         <EventGallery photos={photos} title={e.title} />
 
-        <div className="prose" style={{ margin: 0 }}>
-          {paragraphs.length > 0 && (
-            <>
+        {paragraphs.length > 0 && (
+          <div className="night">
+            <div className="prose">
               <h2>The night</h2>
               {paragraphs.map((p, i) => <p key={i}>{p}</p>)}
-            </>
-          )}
-        </div>
+            </div>
+            <div className="night-art" aria-hidden="true">
+              <img src="/art/drums.png" alt="" width={956} height={716} loading="lazy" decoding="async" />
+              <span className="shine" />
+            </div>
+          </div>
+        )}
 
         <section id="tickets" style={{ paddingTop: 72 }}>
           <h2>Tickets</h2>
