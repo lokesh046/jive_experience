@@ -1110,3 +1110,16 @@ select option { background: #111; }
 .nav .mnav-list a { display: block; padding: 16px 0; color: var(--fg); }
 @media (max-width: 820px) { .mnav { display: block; } }
 @media (prefers-reduced-motion: reduce) { .mt-ico, .mt-ico .mt-path, .mnav-panel { transition: none; } }
+
+/* Musical staff band: a wave-shaped staff that slides across, carrying notes and instruments. */
+.msa { --msa-bg: var(--bg); color: var(--fg); position: relative; overflow: hidden; height: var(--msa-h); -webkit-mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent); mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent); }
+.msa-track { display: flex; width: max-content; height: 100%; animation: msa-slide var(--msa-speed, 110s) linear infinite; will-change: transform; }
+.msa[data-direction="right"] .msa-track { animation-direction: reverse; }
+.msa-tile { display: block; height: 100%; width: auto; flex: none; }
+.msa-float { transform-box: fill-box; transform-origin: center; animation: msa-float 6s ease-in-out infinite; }
+.msa[data-idle] .msa-track, .msa[data-idle] .msa-float { animation-play-state: paused; }
+@keyframes msa-slide { to { transform: translateX(-33.3333%); } }
+@keyframes msa-float { 0%, 100% { transform: translateY(-3px) rotate(-2deg); } 50% { transform: translateY(4px) rotate(2.5deg); } }
+@media (min-width: 821px) { .msa { height: var(--msa-h-tablet); } }
+@media (min-width: 1200px) { .msa { height: var(--msa-h-desktop); } }
+@media (prefers-reduced-motion: reduce) { .msa-track, .msa-float { animation: none; } }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ArchiveMorph } from "@/components/ArchiveMorph";
+import { MusicalStaffAnimation } from "@/components/MusicalStaffAnimation";
 import { ArrowButton } from "@/components/ArrowButton";
 import { EnquiryForm } from "@/components/EnquiryForm";
 import { EventCard } from "@/components/EventCard";
@@ -91,6 +92,8 @@ async function HomeContent() {
           </div>
         </div>
       </section>
+
+      <MusicalStaffAnimation />
 
       <section className="block">
         <div className="wrap">
