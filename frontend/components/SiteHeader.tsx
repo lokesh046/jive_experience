@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { MobileMenu } from "@/components/MobileMenu";
 import { NotificationBell } from "@/components/NotificationBell";
 import { ProfileMenu } from "@/components/ProfileMenu";
@@ -22,7 +23,8 @@ export function SiteHeader() {
           </Link>
           <NotificationBell />
           <ProfileMenu />
-          <MobileMenu />
+          {/* usePathname needs a boundary on pages whose route is only known per request. */}
+          <Suspense fallback={null}><MobileMenu /></Suspense>
         </div>
       </nav>
     </header>
