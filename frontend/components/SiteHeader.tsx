@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MobileMenu } from "@/components/MobileMenu";
 import { NotificationBell } from "@/components/NotificationBell";
 import { ProfileMenu } from "@/components/ProfileMenu";
 import { RoleLinks } from "@/components/RoleLinks";
@@ -21,6 +22,7 @@ export function SiteHeader() {
           </Link>
           <NotificationBell />
           <ProfileMenu />
+          <MobileMenu />
         </div>
       </nav>
     </header>
