@@ -1,12 +1,13 @@
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Body, Chip, ErrorLine, H1, H2, Label, PillButton } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { forgetKey, razorpayHtml } from "@/lib/booking";
 import { useAuth } from "@/lib/auth";
+import { API_V1 } from "@/lib/config";
 import { inr } from "@/lib/format";
 import type { Booking, CheckoutResponse } from "@/lib/types";
 import { color, font } from "@/theme";
@@ -89,6 +90,16 @@ export default function Checkout() {
     return false;
   }, [reference, apply]);
 
+  /** A web view cannot open upi:// or intent:// links: hand them to the phone's payment apps. */
+  function openElsewhere(req: { url: string }): boolean {
+    if (/^(https?|about|data|blob|file):/i.test(req.url)) return true;
+    let target = req.url;
+    const m = req.url.match(/^intent:\/\/(.*?)#Intent;.*?scheme=([a-z0-9.+-]+)/i);
+    if (m) target = `${m[2]}://${m[1]}`;
+    Linking.openURL(target).catch(() => setError("No payment app on this phone could open that. Choose another way to pay."));
+    return false;
+  }
+
   function closeSheet() { setPay(null); void sync(); }
 
   async function startPay() {
@@ -100,6 +111,9 @@ export default function Checkout() {
         ...co.checkout_payload,
         prefill: { email: user?.email, contact: user?.phone_e164 ?? undefined, name: user?.full_name ?? undefined },
         theme: { color: "#000000" },
+        // Netbanking, UPI and 3-D Secure leave the page, so the result comes back by redirect.
+        redirect: true,
+        callback_url: `${API_V1}/payments/razorpay/return`,
       }));
     } catch (e) {
       if (e instanceof ApiError && e.code === "BOOKING_EXPIRED") { setView("expired"); return; }
@@ -181,6 +195,7 @@ export default function Checkout() {
               originWhitelist={["*"]}
               source={{ html: pay, baseUrl: "https://checkout.razorpay.com" }}
               onMessage={(ev) => onMessage(ev.nativeEvent.data)}
+              onShouldStartLoadWithRequest={openElsewhere}
               javaScriptEnabled domStorageEnabled setSupportMultipleWindows={false}
               style={{ flex: 1, backgroundColor: color.bg }}
             />
