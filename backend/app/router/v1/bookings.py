@@ -136,6 +136,24 @@ async def verify_checkout(
     return BookingOut.model_validate(booking)
 
 
+@router.post(
+    "/{reference}/sync",
+    response_model=BookingOut,
+    summary="Check with the payment provider whether this booking was paid",
+)
+async def sync_checkout(
+    reference: str,
+    customer: RequireCustomer,
+    bookings: BookingServiceDep,
+    payments: PaymentServiceDep,
+) -> BookingOut:
+    """For when the payment sheet closed before the app heard the result."""
+    booking = await bookings.get_for_customer(reference, customer)
+    await payments.sync_checkout(booking, customer=customer)
+    refreshed = await bookings.get_for_customer(reference, customer)
+    return BookingOut.model_validate(refreshed)
+
+
 @router.get(
     "/{reference}/refund-quote",
     response_model=RefundQuoteOut,

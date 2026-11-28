@@ -105,6 +105,13 @@ class PaymentService:
                 provider_order_id=existing.provider_order_id,
                 amount_paise=existing.amount_paise,
                 currency=existing.currency,
+                # Re-opening needs the same fields as the first time, or the sheet cannot open.
+                checkout_payload=self.provider.checkout_payload_for(
+                    order_id=existing.provider_order_id,
+                    amount_paise=existing.amount_paise,
+                    currency=existing.currency,
+                    receipt=booking.reference,
+                ),
             )
 
         # Outside any inventory transaction, deliberately.
@@ -315,6 +322,23 @@ class PaymentService:
             raise NotFoundError("Payment not found.", code="PAYMENT_NOT_FOUND")
         if booking.user_id != customer.id:
             raise NotFoundError("Booking not found.", code="BOOKING_NOT_FOUND")
+        return booking
+
+    async def sync_checkout(self, booking: Booking, *, customer: User) -> Booking:
+        """Ask the provider whether this booking's order was paid, and confirm it if so.
+
+        The phone or browser may close, or lose its connection, after the money moved but
+        before it could tell us. Asking again here settles that on demand instead of waiting
+        for the background sweep. Safe to call repeatedly and to race with the webhook.
+        """
+        if booking.user_id != customer.id:
+            raise NotFoundError("Booking not found.", code="BOOKING_NOT_FOUND")
+        payment = await self.payments.by_idempotency_key(f"order:{booking.id}")
+        if payment is None or payment.provider_order_id is None:
+            return booking
+        verified = await self._verified_for(payment.provider_payment_id, payment.provider_order_id)
+        if verified is not None:
+            await self.confirm_from_provider(verified, source="checkout")
         return booking
 
     # ------------------------------------------------------------ webhook ---

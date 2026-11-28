@@ -110,6 +110,12 @@ class PaymentProvider(Protocol):
         self, *, amount_paise: int, currency: str, reference: str, idempotency_key: str
     ) -> CheckoutOrder: ...
 
+    def checkout_payload_for(
+        self, *, order_id: str, amount_paise: int, currency: str, receipt: str | None
+    ) -> dict[str, Any]:
+        """The checkout fields for an order that already exists, so it can be re-opened."""
+        ...
+
     async def fetch_payment(self, provider_payment_id: str) -> VerifiedPayment:
         """Ask the provider for the truth about a payment.
 
@@ -170,6 +176,11 @@ class UnconfiguredPaymentProvider:
     async def create_order(
         self, *, amount_paise: int, currency: str, reference: str, idempotency_key: str
     ) -> CheckoutOrder:
+        raise self._refuse()
+
+    def checkout_payload_for(
+        self, *, order_id: str, amount_paise: int, currency: str, receipt: str | None
+    ) -> dict[str, Any]:
         raise self._refuse()
 
     async def fetch_payment(self, provider_payment_id: str) -> VerifiedPayment:

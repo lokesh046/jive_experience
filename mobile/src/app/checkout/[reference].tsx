@@ -80,9 +80,21 @@ export default function Checkout() {
     } catch { void poll(); }   // the webhook may still confirm it
   }
 
+  /** Ask the server whether this booking was paid. The sheet can close before we hear the result. */
+  const sync = useCallback(async (): Promise<boolean> => {
+    try {
+      const x = await api<Booking>(`bookings/${reference}/sync`, { method: "POST" });
+      if (x.status !== "PENDING") { apply(x); return true; }
+    } catch {}
+    return false;
+  }, [reference, apply]);
+
+  function closeSheet() { setPay(null); void sync(); }
+
   async function startPay() {
     setBusy(true); setError(null);
     try {
+      if (await sync()) return;   // already paid: no second window
       const co = await api<CheckoutResponse>(`bookings/${reference}/checkout`, { method: "POST" });
       setPay(razorpayHtml({
         ...co.checkout_payload,
@@ -99,8 +111,8 @@ export default function Checkout() {
     let m: any; try { m = JSON.parse(raw); } catch { return; }
     if (m.type === "success") void verify(m.payload);
     else if (m.type === "failed") { setPay(null); setView("failed"); }
-    else if (m.type === "dismissed") setPay(null);
-    else if (m.type === "error") { setPay(null); setError("We could not open the payment window. Please try again."); }
+    else if (m.type === "dismissed") closeSheet();
+    else if (m.type === "error") { closeSheet(); setError("We could not open the payment window. Please try again."); }
   }
 
   const holdable = view === "review" || view === "failed";
@@ -158,11 +170,11 @@ export default function Checkout() {
         )}
       </ScrollView>
 
-      <Modal visible={pay !== null} animationType="slide" onRequestClose={() => setPay(null)}>
+      <Modal visible={pay !== null} animationType="slide" onRequestClose={closeSheet}>
         <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingVertical: 12 }}>
             <Text style={{ fontFamily: font.sansBold, color: color.white }}>Payment</Text>
-            <Pressable onPress={() => setPay(null)} accessibilityRole="button" hitSlop={10}><Text style={{ fontFamily: font.sansMedium, color: color.muted }}>Close</Text></Pressable>
+            <Pressable onPress={closeSheet} accessibilityRole="button" hitSlop={10}><Text style={{ fontFamily: font.sansMedium, color: color.muted }}>Close</Text></Pressable>
           </View>
           {pay && (
             <WebView

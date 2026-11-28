@@ -114,6 +114,18 @@ async def test_checkout_payload_carries_the_key_id_but_never_the_secret() -> Non
     assert KEY_SECRET not in json.dumps(order.checkout_payload)
 
 
+def test_a_reopened_order_gets_the_same_checkout_fields_as_a_new_one() -> None:
+    """Closing the payment sheet and opening it again must still have the key and order."""
+    payload = provider(json_response({})).checkout_payload_for(
+        order_id="order_ABC123", amount_paise=150000, currency="INR", receipt="JIVE-1"
+    )
+
+    assert payload["key"] == KEY_ID
+    assert payload["order_id"] == "order_ABC123"
+    assert payload["amount"] == 150000
+    assert KEY_SECRET not in json.dumps(payload)
+
+
 async def test_amount_below_the_provider_minimum_is_refused_locally() -> None:
     """Rejected before the network call — Razorpay's floor is 100 paise."""
     with pytest.raises(BusinessRuleError, match="minimum"):

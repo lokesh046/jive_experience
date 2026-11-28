@@ -144,17 +144,30 @@ class RazorpayProvider:
             provider_order_id=str(data["id"]),
             amount_paise=int(data["amount"]),
             currency=str(data["currency"]),
-            # What Checkout.js needs. `key` is the publishable key id — never
-            # the secret, which has no reason to reach a browser.
-            checkout_payload={
-                "key": self._key_id,
-                "order_id": data["id"],
-                "amount": data["amount"],
-                "currency": data["currency"],
-                "name": self._settings.app_name,
-                "receipt": data.get("receipt"),
-            },
+            checkout_payload=self.checkout_payload_for(
+                order_id=str(data["id"]),
+                amount_paise=int(data["amount"]),
+                currency=str(data["currency"]),
+                receipt=data.get("receipt"),
+            ),
         )
+
+    def checkout_payload_for(
+        self, *, order_id: str, amount_paise: int, currency: str, receipt: str | None
+    ) -> dict[str, Any]:
+        """What Checkout.js needs to open an order, new or re-opened.
+
+        `key` is the publishable key id, never the secret, which has no reason to reach a
+        browser or a phone.
+        """
+        return {
+            "key": self._key_id,
+            "order_id": order_id,
+            "amount": amount_paise,
+            "currency": currency,
+            "name": self._settings.app_name,
+            "receipt": receipt,
+        }
 
     # ---------------------------------------------------------- payments ---
 
