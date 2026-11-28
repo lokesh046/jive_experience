@@ -16,10 +16,10 @@ const LINE_GAP = 13;           // how far apart the five lines sit along the wav
 const STEP = 10;               // px between sampled points
 const FOCAL = 900;             // perspective: bigger is flatter
 
-const ITEMS: Array<{ art: RibbonItem; size: number }> = [
+const ITEMS: Array<{ art: RibbonItem; size: number; lay?: number }> = [
   { art: "treble", size: 104 }, { art: "piano", size: 78 }, { art: "quarter", size: 62 }, { art: "trumpet", size: 84 },
-  { art: "pair", size: 66 }, { art: "bass", size: 82 }, { art: "guitar", size: 84 }, { art: "eighth", size: 62 },
-  { art: "saxophone", size: 86 }, { art: "half", size: 60 }, { art: "violin", size: 86 }, { art: "pair", size: 62 },
+  { art: "pair", size: 66 }, { art: "bass", size: 82 }, { art: "guitar", size: 92, lay: 68 }, { art: "eighth", size: 62 },
+  { art: "saxophone", size: 86, lay: 24 }, { art: "half", size: 60 }, { art: "violin", size: 90, lay: 50 }, { art: "pair", size: 62 },
   { art: "flute", size: 82 }, { art: "drums", size: 78 }, { art: "quarter", size: 58 },
 ];
 
@@ -91,12 +91,14 @@ export function RibbonStage({ children }: { children: ReactNode }) {
         const x = ((((i * span) / ITEMS.length + time * 74) % span) + span) % span - 120;
         const g = geometry(x, time, 2);
         const ahead = geometry(x + 6, time, 2);
-        const tilt = Math.atan2(ahead.y - g.y, 6) * 57.3 * 0.8 + 11 * Math.sin(time * 1.7 + i * 1.9);
-        const bounce = 7 * Math.sin(time * 2.3 + i * 1.3);
-        const pulse = 1 + 0.09 * Math.sin(time * 3.1 + i * 0.8);
+        // Sit on the strings: centred on the middle line, turned to follow it, wobbling only a little.
+        const follow = Math.atan2(ahead.y - g.y, ahead.x - g.x) * 57.3;
+        const tilt = follow + (it.lay ?? 0) + 3 * Math.sin(time * 1.7 + i * 1.9);
+        const bounce = 2.5 * Math.sin(time * 2.3 + i * 1.3);
+        const pulse = 1 + 0.07 * Math.sin(time * 3.1 + i * 0.8);
         const depth = Math.pow(g.s, 2.6);
         const sc = (it.size / 100) * u * depth * pulse;
-        const tf = `translate(${g.x.toFixed(1)} ${(g.y + bounce - it.size * u * 0.42 * depth).toFixed(1)}) rotate(${tilt.toFixed(1)}) scale(${sc.toFixed(3)}) translate(-50 -50)`;
+        const tf = `translate(${g.x.toFixed(1)} ${(g.y + bounce).toFixed(1)}) rotate(${tilt.toFixed(1)}) scale(${sc.toFixed(3)}) translate(-50 -50)`;
         const front = g.z >= 0;
         const fade = Math.min(1, Math.max(0, (g.z + 150) / 300));
         const on = front ? frontItems.current[i] : backItems.current[i];
