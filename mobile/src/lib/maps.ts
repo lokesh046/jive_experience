@@ -29,3 +29,8 @@ export function mapQuery(v: Venue, link: string | null): string {
 
 export const embedUrl = (query: string) => `https://www.google.com/maps?q=${encodeURIComponent(query)}&z=15&output=embed`;
 export const searchUrl = (query: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+
+/** The map as the website draws it: Google's embed inside a frame. On its own, a phone's web view shows it blank. */
+export const mapPage = (query: string) =>
+  `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%;background:#1c1c1c}iframe{border:0;width:100%;height:100%}</style>` +
+  `<iframe src="${embedUrl(query)}" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>`;

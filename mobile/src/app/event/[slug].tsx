@@ -15,7 +15,7 @@ import { ApiError, api } from "@/lib/api";
 import { BOOKING_MESSAGES, idempotencyKey } from "@/lib/booking";
 import { addToCalendar, openDirections } from "@/lib/deviceActions";
 import { dayMonth, inr, longDate, timeOf } from "@/lib/format";
-import { addressOf, embedUrl, isWebLink, mapQuery, searchUrl } from "@/lib/maps";
+import { addressOf, isWebLink, mapPage, mapQuery, searchUrl } from "@/lib/maps";
 import { describePolicy } from "@/lib/policy";
 import { isPremiumType } from "@/lib/premium";
 import { SITE_URL } from "@/lib/config";
@@ -196,7 +196,10 @@ export default function EventScreen() {
               <View style={{ gap: 12 }}>
                 {H("Location")}
                 <View style={{ height: 220, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: color.line }}>
-                  <WebView source={{ uri: embedUrl(query) }} originWhitelist={["https://*"]} scrollEnabled={false} style={{ flex: 1, backgroundColor: color.surface }} accessibilityLabel={`Map showing ${addressOf(v)}`} />
+                  <WebView
+                    source={{ html: mapPage(query), baseUrl: "https://www.google.com/" }}
+                    originWhitelist={["*"]} javaScriptEnabled domStorageEnabled thirdPartyCookiesEnabled setSupportMultipleWindows={false}
+                    scrollEnabled={false} style={{ flex: 1, backgroundColor: color.surface }} accessibilityLabel={`Map showing ${addressOf(v)}`} />
                 </View>
                 <View style={{ gap: 2 }}>
                   <Text style={{ fontFamily: font.sansBold, color: color.white }}>{v.name}</Text>
