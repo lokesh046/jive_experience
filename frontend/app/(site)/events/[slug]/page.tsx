@@ -8,6 +8,7 @@ import { EventLocation } from "@/components/EventLocation";
 import { Lineup } from "@/components/Lineup";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import { VenueDetails } from "@/components/VenueDetails";
+import { DrumKit } from "@/components/DrumKit";
 import { EventGallery } from "@/components/EventGallery";
 import { ArrowButton } from "@/components/ArrowButton";
 import { StickyBuy } from "@/components/StickyBuy";
@@ -114,8 +115,7 @@ async function EventBody({ params }: Pick<PageProps<"/events/[slug]">, "params">
               {paragraphs.map((p, i) => <p key={i}>{p}</p>)}
             </div>
             <div className="night-art" aria-hidden="true">
-              <img src="/art/drums.png" alt="" width={956} height={716} loading="lazy" decoding="async" />
-              <span className="shine" />
+              <DrumKit />
             </div>
           </div>
         )}
