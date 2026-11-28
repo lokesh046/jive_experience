@@ -1137,206 +1137,196 @@ select option { background: #111; }
 /* The night: the description on the left, a drum kit drawn in light on the right. */
 .night { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; justify-content: center; align-items: center; }
 .night .prose { margin: 0 auto; width: 100%; }
-.night-art { position: relative; width: min(100%, 400px); margin: 0 auto; animation: night-draw 1.6s var(--ease) both; }
+.night-art { position: relative; width: min(100%, 420px); margin: 0 auto; animation: night-draw 1.6s var(--ease) both; }
 @keyframes night-draw { from { clip-path: inset(0 100% 0 0); opacity: 0; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
 @media (min-width: 900px) { .night { grid-template-columns: minmax(0, 680px) minmax(0, 400px); gap: 72px; } .night-art { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .night-art { animation: none; } }
-/* The drum kit: one bar of eighth notes, 4 seconds, every hit tied to a keyframe. */
-.dk { display: block; width: 100%; height: auto; color: #fff; overflow: hidden; }
-.dk [class*='dk-'] { transform-box: fill-box; transform-origin: center; }
-.dk .dk-st { transform-box: view-box; transform-origin: 0 0; }
-.dk-loop *, .dk-loop { animation-duration: 4s; animation-iteration-count: infinite; animation-timing-function: linear; }
-@keyframes dk-snare { 0% { transform: scale(1); }
-  25% { transform: scale(1.035); }
-  28.2% { transform: scale(1); }
-  50% { transform: scale(1.035); }
-  53.2% { transform: scale(1); }
-  75% { transform: scale(1.035); }
-  78.2% { transform: scale(1); }
-  100% { transform: scale(1); } }
-.dk-snare { animation-name: dk-snare; }
-@keyframes dk-tom1 { 0% { transform: scale(1); }
-  62.5% { transform: scale(1.035); }
-  65.7% { transform: scale(1); }
-  100% { transform: scale(1); } }
-.dk-tom1 { animation-name: dk-tom1; }
-@keyframes dk-tom2 { 0% { transform: scale(1); }
-  12.5% { transform: scale(1.035); }
-  15.7% { transform: scale(1); }
-  62.5% { transform: scale(1.035); }
-  65.7% { transform: scale(1); }
-  100% { transform: scale(1); } }
-.dk-tom2 { animation-name: dk-tom2; }
-@keyframes dk-floor { 0% { transform: scale(1); }
-  37.5% { transform: scale(1.035); }
-  40.7% { transform: scale(1); }
-  75% { transform: scale(1.035); }
-  78.2% { transform: scale(1); }
-  100% { transform: scale(1); } }
-.dk-floor { animation-name: dk-floor; }
-@keyframes dk-kick { 0% { transform: scale(1); }
-  0% { transform: scale(1.045); }
-  3.2% { transform: scale(1); }
-  37.5% { transform: scale(1.045); }
-  40.7% { transform: scale(1); }
-  50% { transform: scale(1.045); }
-  53.2% { transform: scale(1); }
-  87.5% { transform: scale(1.045); }
-  90.7% { transform: scale(1); }
-  100% { transform: scale(1); } }
-.dk-kick { animation-name: dk-kick; }
-@keyframes dk-crash { 0% { transform: rotate(0); }
-  0% { transform: rotate(-5.00deg); }
-  2.4% { transform: rotate(3.50deg); }
-  4.6% { transform: rotate(-2.00deg); }
-  7% { transform: rotate(0.75deg); }
-  9.5% { transform: rotate(0.00deg); }
-  100% { transform: rotate(0); } }
-.dk-crash { animation-name: dk-crash; }
-@keyframes dk-ride { 0% { transform: rotate(0); }
-  0% { transform: rotate(-4.00deg); }
-  2.4% { transform: rotate(2.80deg); }
-  4.6% { transform: rotate(-1.60deg); }
-  7% { transform: rotate(0.60deg); }
-  9.5% { transform: rotate(0.00deg); }
-  25% { transform: rotate(-4.00deg); }
-  27.4% { transform: rotate(2.80deg); }
-  29.6% { transform: rotate(-1.60deg); }
-  32% { transform: rotate(0.60deg); }
-  34.5% { transform: rotate(0.00deg); }
-  50% { transform: rotate(-4.00deg); }
-  52.4% { transform: rotate(2.80deg); }
-  54.6% { transform: rotate(-1.60deg); }
-  57% { transform: rotate(0.60deg); }
-  59.5% { transform: rotate(0.00deg); }
-  87.5% { transform: rotate(-4.00deg); }
-  89.9% { transform: rotate(2.80deg); }
-  92.1% { transform: rotate(-1.60deg); }
-  94.5% { transform: rotate(0.60deg); }
-  97% { transform: rotate(0.00deg); }
-  100% { transform: rotate(0); } }
-.dk-ride { animation-name: dk-ride; }
-@keyframes dk-hihat { 0% { transform: rotate(0); }
-  12.5% { transform: rotate(-3.00deg); }
-  14.9% { transform: rotate(2.10deg); }
-  17.1% { transform: rotate(-1.20deg); }
-  19.5% { transform: rotate(0.45deg); }
-  22% { transform: rotate(0.00deg); }
-  37.5% { transform: rotate(-3.00deg); }
-  39.9% { transform: rotate(2.10deg); }
-  42.1% { transform: rotate(-1.20deg); }
-  44.5% { transform: rotate(0.45deg); }
-  47% { transform: rotate(0.00deg); }
-  87.5% { transform: rotate(-3.00deg); }
-  89.9% { transform: rotate(2.10deg); }
-  92.1% { transform: rotate(-1.20deg); }
-  94.5% { transform: rotate(0.45deg); }
-  97% { transform: rotate(0.00deg); }
-  100% { transform: rotate(0); } }
-.dk-hihat { animation-name: dk-hihat; }
-@keyframes dk-r-crash { 0%, 100% { transform: scale(0.8); opacity: 0; }
-  0% { transform: scale(0.85); opacity: 0.85; }
-  5% { transform: scale(1.5); opacity: 0; }
+/* The drum kit: your drawing, cut into pieces that answer a one-bar groove (4s). */
+.dk { position: relative; width: 100%; aspect-ratio: 478 / 358; color: #fff; }
+.dk-p, .dk-base { position: absolute; display: block; user-select: none; -webkit-user-drag: none; }
+.dk-base { inset: 0; width: 100%; height: 100%; }
+.dk-fx { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.dk-loop .dk-p, .dk-loop .dk-st, .dk-loop .dk-sp { animation-duration: 4s; animation-iteration-count: infinite; animation-timing-function: linear; }
+.dk-st, .dk-sp { transform-box: view-box; transform-origin: 0 0; }
+.dk-kick { left: 34.937%; top: 47.765%; width: 29.498%; height: 39.385%; transform-origin: 49.65% 49.65%; animation-name: dk-kick; }
+.dk-tom1 { left: 37.238%; top: 27.095%; width: 15.690%; height: 20.670%; transform-origin: 49.33% 50.0%; animation-name: dk-tom1; }
+.dk-tom2 { left: 51.674%; top: 27.654%; width: 13.808%; height: 20.112%; transform-origin: 48.48% 48.61%; animation-name: dk-tom2; }
+.dk-tom3 { left: 64.854%; top: 26.816%; width: 12.134%; height: 17.598%; transform-origin: 48.28% 49.21%; animation-name: dk-tom3; }
+.dk-cymL { left: 12.343%; top: 24.581%; width: 17.573%; height: 13.966%; transform-origin: 48.81% 68.0%; animation-name: dk-cymL; }
+.dk-crash { left: 19.456%; top: 12.011%; width: 22.594%; height: 18.156%; transform-origin: 46.3% 61.54%; animation-name: dk-crash; }
+.dk-ride { left: 61.715%; top: 9.777%; width: 25.314%; height: 17.318%; transform-origin: 51.24% 69.35%; animation-name: dk-ride; }
+.dk-cymR { left: 74.059%; top: 29.609%; width: 14.017%; height: 6.983%; transform-origin: 32.84% 52.0%; animation-name: dk-cymR; }
+@keyframes dk-tom1 { 0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  53.4% { transform: scale(1); }
+  87.5% { transform: scale(1.03); }
+  90.9% { transform: scale(1); }
 }
-.dk-r-crash { animation-name: dk-r-crash; }
-@keyframes dk-r-hihat { 0%, 100% { transform: scale(0.8); opacity: 0; }
-  12.5% { transform: scale(0.85); opacity: 0.85; }
-  17.5% { transform: scale(1.5); opacity: 0; }
-  37.5% { transform: scale(0.85); opacity: 0.85; }
-  42.5% { transform: scale(1.5); opacity: 0; }
-  87.5% { transform: scale(0.85); opacity: 0.85; }
-  92.5% { transform: scale(1.5); opacity: 0; }
+@keyframes dk-tom2 { 0%, 100% { transform: scale(1); }
+  37.5% { transform: scale(1.03); }
+  40.9% { transform: scale(1); }
+  87.5% { transform: scale(1.03); }
+  90.9% { transform: scale(1); }
 }
-.dk-r-hihat { animation-name: dk-r-hihat; }
-@keyframes dk-r-snare { 0%, 100% { transform: scale(0.8); opacity: 0; }
-  25% { transform: scale(0.85); opacity: 0.85; }
-  30% { transform: scale(1.5); opacity: 0; }
-  50% { transform: scale(0.85); opacity: 0.85; }
-  55% { transform: scale(1.5); opacity: 0; }
-  75% { transform: scale(0.85); opacity: 0.85; }
-  80% { transform: scale(1.5); opacity: 0; }
+@keyframes dk-tom3 { 0%, 100% { transform: scale(1); }
+  12.5% { transform: scale(1.03); }
+  15.9% { transform: scale(1); }
+  75% { transform: scale(1.03); }
+  78.4% { transform: scale(1); }
 }
-.dk-r-snare { animation-name: dk-r-snare; }
-@keyframes dk-r-tom1 { 0%, 100% { transform: scale(0.8); opacity: 0; }
-  62.5% { transform: scale(0.85); opacity: 0.85; }
-  67.5% { transform: scale(1.5); opacity: 0; }
+@keyframes dk-kick { 0%, 100% { transform: scale(1); }
+  0% { transform: scale(1.022); }
+  3.4% { transform: scale(1); }
+  37.5% { transform: scale(1.022); }
+  40.9% { transform: scale(1); }
+  50% { transform: scale(1.022); }
+  53.4% { transform: scale(1); }
+  87.5% { transform: scale(1.022); }
+  90.9% { transform: scale(1); }
 }
-.dk-r-tom1 { animation-name: dk-r-tom1; }
-@keyframes dk-r-tom2 { 0%, 100% { transform: scale(0.8); opacity: 0; }
-  12.5% { transform: scale(0.85); opacity: 0.85; }
-  17.5% { transform: scale(1.5); opacity: 0; }
-  62.5% { transform: scale(0.85); opacity: 0.85; }
-  67.5% { transform: scale(1.5); opacity: 0; }
+@keyframes dk-crash { 0%, 100% { transform: rotate(0); }
+  0% { transform: rotate(-3.40deg); }
+  2.2% { transform: rotate(2.55deg); }
+  4.4% { transform: rotate(-1.53deg); }
+  6.8% { transform: rotate(0.68deg); }
+  9.4% { transform: rotate(0.00deg); }
 }
-.dk-r-tom2 { animation-name: dk-r-tom2; }
-@keyframes dk-r-floor { 0%, 100% { transform: scale(0.8); opacity: 0; }
-  37.5% { transform: scale(0.85); opacity: 0.85; }
-  42.5% { transform: scale(1.5); opacity: 0; }
-  75% { transform: scale(0.85); opacity: 0.85; }
-  80% { transform: scale(1.5); opacity: 0; }
+@keyframes dk-ride { 0%, 100% { transform: rotate(0); }
+  0% { transform: rotate(-3.00deg); }
+  2.2% { transform: rotate(2.25deg); }
+  4.4% { transform: rotate(-1.35deg); }
+  6.8% { transform: rotate(0.60deg); }
+  9.4% { transform: rotate(0.00deg); }
+  25% { transform: rotate(-3.00deg); }
+  27.2% { transform: rotate(2.25deg); }
+  29.4% { transform: rotate(-1.35deg); }
+  31.8% { transform: rotate(0.60deg); }
+  34.4% { transform: rotate(0.00deg); }
+  50% { transform: rotate(-3.00deg); }
+  52.2% { transform: rotate(2.25deg); }
+  54.4% { transform: rotate(-1.35deg); }
+  56.8% { transform: rotate(0.60deg); }
+  59.4% { transform: rotate(0.00deg); }
 }
-.dk-r-floor { animation-name: dk-r-floor; }
-@keyframes dk-r-ride { 0%, 100% { transform: scale(0.8); opacity: 0; }
-  0% { transform: scale(0.85); opacity: 0.85; }
-  5% { transform: scale(1.5); opacity: 0; }
-  25% { transform: scale(0.85); opacity: 0.85; }
-  30% { transform: scale(1.5); opacity: 0; }
-  50% { transform: scale(0.85); opacity: 0.85; }
-  55% { transform: scale(1.5); opacity: 0; }
-  87.5% { transform: scale(0.85); opacity: 0.85; }
-  92.5% { transform: scale(1.5); opacity: 0; }
+@keyframes dk-cymL { 0%, 100% { transform: rotate(0); }
+  12.5% { transform: rotate(-4.20deg); }
+  14.7% { transform: rotate(3.15deg); }
+  16.9% { transform: rotate(-1.89deg); }
+  19.3% { transform: rotate(0.84deg); }
+  21.9% { transform: rotate(0.00deg); }
+  37.5% { transform: rotate(-4.20deg); }
+  39.7% { transform: rotate(3.15deg); }
+  41.9% { transform: rotate(-1.89deg); }
+  44.3% { transform: rotate(0.84deg); }
+  46.9% { transform: rotate(0.00deg); }
+  62.5% { transform: rotate(-4.20deg); }
+  64.7% { transform: rotate(3.15deg); }
+  66.9% { transform: rotate(-1.89deg); }
+  69.3% { transform: rotate(0.84deg); }
+  71.9% { transform: rotate(0.00deg); }
 }
-.dk-r-ride { animation-name: dk-r-ride; }
-@keyframes dk-r-kick { 0%, 100% { transform: scale(0.8); opacity: 0; }
-  0% { transform: scale(0.85); opacity: 0.85; }
-  5% { transform: scale(1.5); opacity: 0; }
-  37.5% { transform: scale(0.85); opacity: 0.85; }
-  42.5% { transform: scale(1.5); opacity: 0; }
-  50% { transform: scale(0.85); opacity: 0.85; }
-  55% { transform: scale(1.5); opacity: 0; }
-  87.5% { transform: scale(0.85); opacity: 0.85; }
-  92.5% { transform: scale(1.5); opacity: 0; }
+@keyframes dk-cymR { 0%, 100% { transform: rotate(0); }
+  62.5% { transform: rotate(-6.00deg); }
+  64.7% { transform: rotate(4.50deg); }
+  66.9% { transform: rotate(-2.70deg); }
+  69.3% { transform: rotate(1.20deg); }
+  71.9% { transform: rotate(0.00deg); }
 }
-.dk-r-kick { animation-name: dk-r-kick; }
+@keyframes dk-sp-crash { 0%, 100% { opacity: 0; transform: translate(150px, 66px) scale(0.5); }
+  0% { opacity: 1; transform: translate(150px, 66px) scale(0.7); }
+  4.5% { opacity: 0; transform: translate(150px, 66px) scale(1.5); }
+}
+.dk-sp-crash { animation-name: dk-sp-crash; opacity: 0; }
+@keyframes dk-sp-cymL { 0%, 100% { opacity: 0; transform: translate(100px, 112px) scale(0.5); }
+  12.5% { opacity: 1; transform: translate(100px, 112px) scale(0.7); }
+  17% { opacity: 0; transform: translate(100px, 112px) scale(1.5); }
+  37.5% { opacity: 1; transform: translate(100px, 112px) scale(0.7); }
+  42% { opacity: 0; transform: translate(100px, 112px) scale(1.5); }
+  62.5% { opacity: 1; transform: translate(100px, 112px) scale(0.7); }
+  67% { opacity: 0; transform: translate(100px, 112px) scale(1.5); }
+}
+.dk-sp-cymL { animation-name: dk-sp-cymL; opacity: 0; }
+@keyframes dk-sp-ride { 0%, 100% { opacity: 0; transform: translate(350px, 62px) scale(0.5); }
+  0% { opacity: 1; transform: translate(350px, 62px) scale(0.7); }
+  4.5% { opacity: 0; transform: translate(350px, 62px) scale(1.5); }
+  25% { opacity: 1; transform: translate(350px, 62px) scale(0.7); }
+  29.5% { opacity: 0; transform: translate(350px, 62px) scale(1.5); }
+  50% { opacity: 1; transform: translate(350px, 62px) scale(0.7); }
+  54.5% { opacity: 0; transform: translate(350px, 62px) scale(1.5); }
+}
+.dk-sp-ride { animation-name: dk-sp-ride; opacity: 0; }
+@keyframes dk-sp-cymR { 0%, 100% { opacity: 0; transform: translate(392px, 116px) scale(0.5); }
+  62.5% { opacity: 1; transform: translate(392px, 116px) scale(0.7); }
+  67% { opacity: 0; transform: translate(392px, 116px) scale(1.5); }
+}
+.dk-sp-cymR { animation-name: dk-sp-cymR; opacity: 0; }
+@keyframes dk-sp-tom1 { 0%, 100% { opacity: 0; transform: translate(215px, 106px) scale(0.5); }
+  50% { opacity: 1; transform: translate(215px, 106px) scale(0.7); }
+  54.5% { opacity: 0; transform: translate(215px, 106px) scale(1.5); }
+  87.5% { opacity: 1; transform: translate(215px, 106px) scale(0.7); }
+  92% { opacity: 0; transform: translate(215px, 106px) scale(1.5); }
+}
+.dk-sp-tom1 { animation-name: dk-sp-tom1; opacity: 0; }
+@keyframes dk-sp-tom2 { 0%, 100% { opacity: 0; transform: translate(279px, 108px) scale(0.5); }
+  37.5% { opacity: 1; transform: translate(279px, 108px) scale(0.7); }
+  42% { opacity: 0; transform: translate(279px, 108px) scale(1.5); }
+  87.5% { opacity: 1; transform: translate(279px, 108px) scale(0.7); }
+  92% { opacity: 0; transform: translate(279px, 108px) scale(1.5); }
+}
+.dk-sp-tom2 { animation-name: dk-sp-tom2; opacity: 0; }
+@keyframes dk-sp-tom3 { 0%, 100% { opacity: 0; transform: translate(338px, 106px) scale(0.5); }
+  12.5% { opacity: 1; transform: translate(338px, 106px) scale(0.7); }
+  17% { opacity: 0; transform: translate(338px, 106px) scale(1.5); }
+  75% { opacity: 1; transform: translate(338px, 106px) scale(0.7); }
+  79.5% { opacity: 0; transform: translate(338px, 106px) scale(1.5); }
+}
+.dk-sp-tom3 { animation-name: dk-sp-tom3; opacity: 0; }
+@keyframes dk-sp-snare { 0%, 100% { opacity: 0; transform: translate(185px, 171px) scale(0.5); }
+  25% { opacity: 1; transform: translate(185px, 171px) scale(0.7); }
+  29.5% { opacity: 0; transform: translate(185px, 171px) scale(1.5); }
+  75% { opacity: 1; transform: translate(185px, 171px) scale(0.7); }
+  79.5% { opacity: 0; transform: translate(185px, 171px) scale(1.5); }
+}
+.dk-sp-snare { animation-name: dk-sp-snare; opacity: 0; }
 @keyframes dk-stl {
-  0% { transform: translate(140px, 84px) rotate(-20deg); }
-  6.88% { transform: translate(98px, 38px) rotate(-34deg); }
-  12.5% { transform: translate(56px, 160px) rotate(-20deg); }
-  19.38% { transform: translate(103px, 114px) rotate(-34deg); }
-  25% { transform: translate(150px, 230px) rotate(-20deg); }
-  31.88% { transform: translate(103px, 114px) rotate(-34deg); }
-  37.5% { transform: translate(56px, 160px) rotate(-20deg); }
-  44.38% { transform: translate(103px, 114px) rotate(-34deg); }
-  50% { transform: translate(150px, 230px) rotate(-20deg); }
-  56.88% { transform: translate(172px, 102px) rotate(-34deg); }
-  62.5% { transform: translate(195px, 148px) rotate(-20deg); }
-  69.38% { transform: translate(172px, 102px) rotate(-34deg); }
-  75% { transform: translate(150px, 230px) rotate(-20deg); }
-  81.88% { transform: translate(103px, 114px) rotate(-34deg); }
-  87.5% { transform: translate(56px, 160px) rotate(-20deg); }
-  94.38% { transform: translate(98px, 38px) rotate(-34deg); }
-  100% { transform: translate(140px, 84px) rotate(-20deg); }
+  0% { transform: translate(150px, 66px) rotate(-18deg); }
+  6.88% { transform: translate(125px, 32px) rotate(-32deg); }
+  12.5% { transform: translate(100px, 112px) rotate(-18deg); }
+  19.38% { transform: translate(142px, 78px) rotate(-32deg); }
+  25% { transform: translate(185px, 171px) rotate(-18deg); }
+  31.88% { transform: translate(142px, 78px) rotate(-32deg); }
+  37.5% { transform: translate(100px, 112px) rotate(-18deg); }
+  44.38% { transform: translate(158px, 72px) rotate(-32deg); }
+  50% { transform: translate(215px, 106px) rotate(-18deg); }
+  56.88% { transform: translate(158px, 72px) rotate(-32deg); }
+  62.5% { transform: translate(100px, 112px) rotate(-18deg); }
+  69.38% { transform: translate(142px, 78px) rotate(-32deg); }
+  75% { transform: translate(185px, 171px) rotate(-18deg); }
+  81.88% { transform: translate(200px, 72px) rotate(-32deg); }
+  87.5% { transform: translate(215px, 106px) rotate(-18deg); }
+  94.38% { transform: translate(182px, 32px) rotate(-32deg); }
+  100% { transform: translate(150px, 66px) rotate(-18deg); }
 }
 @keyframes dk-str {
-  0% { transform: translate(420px, 92px) rotate(20deg); }
-  6.88% { transform: translate(352px, 46px) rotate(34deg); }
-  12.5% { transform: translate(283px, 148px) rotate(20deg); }
-  19.38% { transform: translate(352px, 46px) rotate(34deg); }
-  25% { transform: translate(420px, 92px) rotate(20deg); }
-  31.88% { transform: translate(406px, 46px) rotate(34deg); }
-  37.5% { transform: translate(392px, 212px) rotate(20deg); }
-  44.38% { transform: translate(406px, 46px) rotate(34deg); }
-  50% { transform: translate(420px, 92px) rotate(20deg); }
-  56.88% { transform: translate(352px, 46px) rotate(34deg); }
-  62.5% { transform: translate(283px, 148px) rotate(20deg); }
-  69.38% { transform: translate(338px, 102px) rotate(34deg); }
-  75% { transform: translate(392px, 212px) rotate(20deg); }
-  81.88% { transform: translate(406px, 46px) rotate(34deg); }
-  87.5% { transform: translate(420px, 92px) rotate(20deg); }
-  94.38% { transform: translate(420px, 46px) rotate(34deg); }
-  100% { transform: translate(420px, 92px) rotate(20deg); }
+  0% { transform: translate(350px, 62px) rotate(18deg); }
+  6.88% { transform: translate(344px, 28px) rotate(32deg); }
+  12.5% { transform: translate(338px, 106px) rotate(18deg); }
+  19.38% { transform: translate(344px, 28px) rotate(32deg); }
+  25% { transform: translate(350px, 62px) rotate(18deg); }
+  31.88% { transform: translate(314px, 28px) rotate(32deg); }
+  37.5% { transform: translate(279px, 108px) rotate(18deg); }
+  44.38% { transform: translate(314px, 28px) rotate(32deg); }
+  50% { transform: translate(350px, 62px) rotate(18deg); }
+  56.88% { transform: translate(371px, 28px) rotate(32deg); }
+  62.5% { transform: translate(392px, 116px) rotate(18deg); }
+  69.38% { transform: translate(365px, 72px) rotate(32deg); }
+  75% { transform: translate(338px, 106px) rotate(18deg); }
+  81.88% { transform: translate(308px, 72px) rotate(32deg); }
+  87.5% { transform: translate(279px, 108px) rotate(18deg); }
+  94.38% { transform: translate(314px, 28px) rotate(32deg); }
+  100% { transform: translate(350px, 62px) rotate(18deg); }
 }
-.dk-stl { animation-name: dk-stl; animation-timing-function: cubic-bezier(.5,0,.3,1); }
-.dk-str { animation-name: dk-str; animation-timing-function: cubic-bezier(.5,0,.3,1); }
-.dk-idle * , .dk-idle { animation-play-state: paused; }
-@media (prefers-reduced-motion: reduce) { .dk-loop *, .dk-loop { animation: none; } .dk-st { transform: translate(300px, 120px); } .dk [class*='dk-r-'] { opacity: 0; } }
+.dk-stl { animation-name: dk-stl; animation-timing-function: cubic-bezier(.5,0,.3,1) !important; }
+.dk-str { animation-name: dk-str; animation-timing-function: cubic-bezier(.5,0,.3,1) !important; }
+.dk-idle .dk-p, .dk-idle .dk-st, .dk-idle .dk-sp { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .dk-loop .dk-p, .dk-loop .dk-st, .dk-loop .dk-sp { animation: none; } .dk-sp { display: none; } .dk-st { transform: translate(215px, 106px) rotate(-18deg); } .dk-st + .dk-st { transform: translate(338px, 106px) rotate(18deg); } }
