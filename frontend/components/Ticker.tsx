@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TickerMark } from "@/components/TickerMark";
 import { TickerShell } from "@/components/TickerShell";
 import { dayMonth } from "@/lib/format";
 import type { EventListItem } from "@/lib/types";
@@ -18,7 +19,7 @@ export function Ticker({ events }: { events: EventListItem[] }) {
             <em>{dayMonth(e.starts_at, e.timezone)}</em>
             <em>{e.venue_name}</em>
           </Link>
-          <i />
+          <TickerMark n={i} />
         </span>
       ))}
     </div>
