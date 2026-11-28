@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { TickerMark } from "@/components/TickerMark";
+import { RibbonStage } from "@/components/RibbonStage";
 import { TickerShell } from "@/components/TickerShell";
 import { dayMonth } from "@/lib/format";
 import type { EventListItem } from "@/lib/types";
@@ -19,12 +19,13 @@ export function Ticker({ events }: { events: EventListItem[] }) {
             <em>{dayMonth(e.starts_at, e.timezone)}</em>
             <em>{e.venue_name}</em>
           </Link>
-          <TickerMark n={i} />
+          <i />
         </span>
       ))}
     </div>
   );
   return (
+    <RibbonStage>
     <TickerShell>
       <div className="view">
         <div className="track">
@@ -33,5 +34,6 @@ export function Ticker({ events }: { events: EventListItem[] }) {
         </div>
       </div>
     </TickerShell>
+    </RibbonStage>
   );
 }
